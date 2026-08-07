@@ -41,9 +41,20 @@ On any fresh Linux VPS, as root:
 bash <(curl -Ls https://raw.githubusercontent.com/cmtrswtng/amnezia-wg-ui/master/install.sh)
 ```
 
-The script installs Docker if needed, asks for the server's public IP and an admin password
-(twice, hidden input), writes `/opt/amnezia-wg-ui/{.env,docker-compose.yml}`, opens the
-firewall ports and starts the container. Re-run it anytime to update.
+The script will:
+
+1. Install Docker (via the official `get.docker.com` script) if it's missing.
+2. Auto-detect the server's public IP and ask you to confirm or edit it, then ask for the Web UI and WireGuard ports (defaults `51821` / `51820`).
+3. Ask for the admin password twice (hidden input) and generate its bcrypt hash using the Docker image itself — no Node.js needed on the host.
+4. Write `/opt/amnezia-wg-ui/.env` (mode `600`) and `/opt/amnezia-wg-ui/docker-compose.yml`.
+5. Open `51820/udp` and `51821/tcp` in `ufw` if it's active (otherwise it reminds you to open them in your cloud firewall).
+6. Start the container and **verify** that the password actually matches the hash seen by the running container.
+
+When done it prints the Web UI URL (`http://<your-ip>:51821`).
+
+**Updating:** just re-run the same one-liner — it detects the existing installation and offers to pull the latest image. To go through the full setup again (new password, ports, etc.), wipe `/opt/amnezia-wg-ui` first or edit the files there manually and run `docker compose up -d --force-recreate`.
+
+**Files and data:** everything lives in `/opt/amnezia-wg-ui`; clients, keys and the audit log are stored in the `awg_data` Docker volume — `docker compose down` keeps them, `down -v` deletes them.
 
 ### 1. Install Docker (manual way)
 
