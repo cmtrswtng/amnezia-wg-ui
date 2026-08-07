@@ -1,5 +1,5 @@
 <template>
-  <div class="glass px-4 py-3 flex flex-wrap items-center gap-2 fixed sm:static bottom-0 inset-x-0 z-30 sm:z-auto border-t sm:border-t-0 border-white/10">
+  <div class="glass px-4 py-3 flex flex-wrap items-center gap-2 fixed sm:static bottom-0 inset-x-0 z-30 sm:z-auto border-t sm:border-t-0 border-white/10 backdrop-blur">
     <span class="text-xs text-zinc-400">{{ $t('selected') }}: {{ count }}</span>
 
     <button class="glass-button text-xs" @click="$emit('extend', 7)">{{ $t('preset7d') }}</button>
