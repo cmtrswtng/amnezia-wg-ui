@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#0a0a0f] text-zinc-200 antialiased;
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
+  }
+
+  .glass-input {
+    @apply bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-100
+      placeholder-zinc-500 outline-none focus:border-indigo-400/60 focus:ring-1 focus:ring-indigo-400/40
+      transition-colors;
+  }
+
+  .glass-button {
+    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium
+      bg-white/5 border border-white/10 text-zinc-200 hover:bg-white/10 transition-colors
+      disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .glass-button-primary {
+    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium
+      bg-indigo-500/80 border border-indigo-400/40 text-white hover:bg-indigo-500 transition-colors
+      disabled:opacity-50 disabled:pointer-events-none;
+  }
+}
