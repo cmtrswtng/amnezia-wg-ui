@@ -15,13 +15,13 @@
           <span
             v-for="tag in client.tags"
             :key="tag"
-            class="text-[11px] px-2 py-0.5 rounded-md bg-white/5 border border-white/[0.08] text-zinc-400"
+            class="tag-chip text-[11px] px-2 py-0.5 rounded-md"
           >{{ tag }}</span>
         </div>
       </div>
       <label class="shrink-0 inline-flex items-center cursor-pointer" :title="client.enabled ? $t('disableClient') : $t('enableClient')">
         <input type="checkbox" class="sr-only peer" :checked="client.enabled" @change="$emit('toggle', client)" />
-        <div class="w-9 h-5 rounded-full bg-white/10 peer-checked:bg-[#059669]
+        <div class="w-9 h-5 rounded-full bg-white/10 peer-checked:bg-[#0ea5e9]
           relative transition-colors
           after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:rounded-full
           after:bg-white after:transition-transform peer-checked:after:translate-x-4" />
@@ -38,8 +38,8 @@
     </div>
 
     <div v-if="chartTypeClass" class="grid grid-cols-2 gap-2">
-      <TrafficChart :data="client.transferRxHistory" :chart-type="chartTypeClass" color="rgba(161,161,170,0.5)" />
-      <TrafficChart :data="client.transferTxHistory" :chart-type="chartTypeClass" color="rgba(52,211,153,0.5)" />
+      <TrafficChart :data="client.transferRxHistory" :chart-type="chartTypeClass" color="rgba(56,189,248,0.5)" />
+      <TrafficChart :data="client.transferTxHistory" :chart-type="chartTypeClass" color="rgba(148,163,184,0.5)" />
     </div>
 
     <div class="flex flex-wrap gap-2 pt-1">

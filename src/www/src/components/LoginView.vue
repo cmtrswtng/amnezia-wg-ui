@@ -10,7 +10,7 @@
         autofocus
       />
       <label v-if="rememberMeEnabled" class="flex items-center gap-2 text-sm text-zinc-400">
-        <input v-model="remember" type="checkbox" class="rounded accent-zinc-300" />
+        <input v-model="remember" type="checkbox" class="rounded accent-[#38bdf8]" />
         {{ $t('rememberMe') }}
       </label>
       <button type="submit" class="glass-button-primary justify-center" :disabled="!password || authenticating">

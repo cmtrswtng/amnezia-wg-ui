@@ -5,7 +5,7 @@
       @click.self="$emit('close')"
     >
       <div
-        class="w-full p-6 rounded-xl bg-[#131316] border border-white/[0.08] shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
+        class="w-full p-6 rounded-xl bg-[#343638] border border-white/[0.08] shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
         :class="maxWidth"
       >
         <slot />
