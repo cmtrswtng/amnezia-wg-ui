@@ -17,15 +17,18 @@
       ⭱ {{ $t('restore') }}
       <input type="file" accept=".json,application/json" class="hidden" @change="onRestoreFile" />
     </label>
-    <button class="glass-button" @click="$emit('logout')">{{ $t('logout') }}</button>
+    <button v-if="requiresPassword" class="glass-button" @click="$emit('logout')">{{ $t('logout') }}</button>
   </header>
 </template>
 
 <script setup>
 import { useI18n } from 'vue-i18n';
 
+import { useSession } from '../composables/useSession';
+
 const emit = defineEmits(['backup', 'restore', 'logout']);
 const { locale, availableLocales } = useI18n();
+const { requiresPassword } = useSession();
 
 function changeLocale(l) {
   locale.value = l;
