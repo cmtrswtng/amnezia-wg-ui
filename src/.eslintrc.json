@@ -1,9 +1,11 @@
 {
   "extends": "athom",
   "ignorePatterns": [
-    "**/vendor/*.js"
+    "**/vendor/*.js",
+    "www/**"
   ],
   "rules": {
+    "linebreak-style": "off",
     "consistent-return": "off",
     "no-shadow": "off",
     "max-len": "off"

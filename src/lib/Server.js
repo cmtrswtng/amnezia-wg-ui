@@ -131,7 +131,7 @@ module.exports = class Server {
         return {
           dicebear: DICEBEAR_TYPE,
           gravatar: USE_GRAVATAR,
-        }
+        };
       }))
 
       // Authentication
