@@ -1,6 +1,10 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4">
-    <form class="glass w-full max-w-sm p-8 flex flex-col gap-4" @submit.prevent="submit">
+  <div class="min-h-screen flex items-center justify-center p-4 relative">
+    <div
+      class="absolute w-96 h-96 rounded-full blur-3xl opacity-30
+        bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600"
+    />
+    <form class="glass relative w-full max-w-sm p-8 flex flex-col gap-4" @submit.prevent="submit">
       <h1 class="text-xl font-semibold text-center text-zinc-100">AmneziaWG Easy</h1>
       <input
         v-model="password"

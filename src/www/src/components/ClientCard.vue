@@ -1,10 +1,13 @@
 <template>
-  <div class="glass p-4 flex flex-col gap-3">
+  <div class="glass glass-hoverable p-4 flex flex-col gap-3">
     <div class="flex items-start gap-3">
       <img v-if="avatar" :src="avatar" class="w-10 h-10 rounded-full shrink-0" alt="" />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full shrink-0" :class="statusDotClass" />
+          <span
+            class="w-2 h-2 rounded-full shrink-0 shadow-[0_0_8px_currentColor]"
+            :class="statusDotClass"
+          />
           <span class="font-medium text-zinc-100 truncate">{{ client.name }}</span>
         </div>
         <div class="text-xs text-zinc-500 font-mono">{{ client.address }}</div>
@@ -18,7 +21,8 @@
       </div>
       <label class="shrink-0 inline-flex items-center cursor-pointer" :title="client.enabled ? $t('disableClient') : $t('enableClient')">
         <input type="checkbox" class="sr-only peer" :checked="client.enabled" @change="$emit('toggle', client)" />
-        <div class="w-9 h-5 rounded-full bg-white/10 peer-checked:bg-indigo-500/70 relative transition-colors
+        <div class="w-9 h-5 rounded-full bg-white/10 peer-checked:bg-gradient-to-r peer-checked:from-indigo-500
+          peer-checked:to-violet-500 relative transition-colors
           after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:rounded-full
           after:bg-white after:transition-transform peer-checked:after:translate-x-4" />
       </label>
