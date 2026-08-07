@@ -59,6 +59,7 @@ export default {
     save: 'Save',
     copiedToClipboard: 'Copied to clipboard',
     oneTimeLinkCopied: 'One-time link copied to clipboard',
+    oneTimeLinkShort: 'One-time link',
   },
   ua: {
     name: 'Ім`я',
@@ -154,6 +155,7 @@ export default {
     save: 'Сохранить',
     copiedToClipboard: 'Скопировано в буфер обмена',
     oneTimeLinkCopied: 'Одноразовая ссылка скопирована',
+    oneTimeLinkShort: 'Одноразовая ссылка',
   },
   tr: { // Müslüm Barış Korkmazer @babico
     name: 'İsim',
