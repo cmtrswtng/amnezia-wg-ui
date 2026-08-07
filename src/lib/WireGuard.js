@@ -10,6 +10,13 @@ const CRC32 = require('crc-32');
 const Util = require('./Util');
 const ServerError = require('./ServerError');
 const { normalizeTags, isClientExpired, shouldEnableOnExpireUpdate } = require('./clientUtils');
+const {
+  validateQuotaInput,
+  transferDelta,
+  isCycleDue,
+  isQuotaExceeded,
+  quotaCycleEndsAt,
+} = require('./quotaUtils');
 
 const {
   WG_PATH,
@@ -184,6 +191,18 @@ ${client.preSharedKey ? `PresharedKey = ${client.preSharedKey}\n` : ''
       allowedIPs: client.allowedIPs,
       oneTimeLink: client.oneTimeLink ?? null,
       oneTimeLinkExpiresAt: client.oneTimeLinkExpiresAt ?? null,
+      quotaBytes: client.quotaBytes ?? null,
+      quotaCycleDays: client.quotaCycleDays ?? null,
+      quotaCycleStartAt: client.quotaCycleStartAt ?? null,
+      quotaUsedBytes: client.quotaUsedBytes ?? 0,
+      quotaExceeded: client.quotaExceeded ?? false,
+      quotaRemainingBytes: client.quotaBytes != null
+        ? Math.max(0, client.quotaBytes - (client.quotaUsedBytes ?? 0))
+        : null,
+      quotaUsedPercent: client.quotaBytes != null
+        ? Math.min(100, Math.round(((client.quotaUsedBytes ?? 0) / client.quotaBytes) * 100))
+        : null,
+      quotaCycleEndsAt: quotaCycleEndsAt(client),
       downloadableConfig: 'privateKey' in client,
       persistentKeepalive: null,
       latestHandshakeAt: null,
@@ -273,7 +292,9 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     });
   }
 
-  async createClient({ name, expiredDate, tags }) {
+  async createClient({
+    name, expiredDate, tags, quotaBytes, quotaCycleDays,
+  }) {
     if (!name) {
       throw new Error('Missing: Name');
     }
@@ -285,6 +306,8 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
       log: 'echo ***hidden*** | wg pubkey',
     });
     const preSharedKey = await Util.exec('wg genpsk');
+
+    const quota = validateQuotaInput({ quotaBytes, quotaCycleDays });
 
     // Calculate next IP
     let address;
@@ -317,6 +340,13 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
       expiredAt: null,
       enabled: true,
       tags: normalizeTags(tags),
+      quotaBytes: quota.quotaBytes,
+      quotaCycleDays: quota.quotaCycleDays,
+      quotaCycleStartAt: quota.quotaBytes ? new Date() : null,
+      quotaUsedBytes: 0,
+      quotaLastRx: null,
+      quotaLastTx: null,
+      quotaExceeded: false,
     };
     if (expiredDate) {
       client.expiredAt = new Date(expiredDate);
@@ -341,6 +371,11 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     const client = await this.getClient({ clientId });
 
     client.enabled = true;
+    if (client.quotaExceeded) {
+      client.quotaUsedBytes = 0;
+      client.quotaCycleStartAt = new Date();
+      client.quotaExceeded = false;
+    }
     client.updatedAt = new Date();
 
     await this.saveConfig();
@@ -390,6 +425,46 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     await this.saveConfig();
   }
 
+  async setClientQuota({ clientId, quotaBytes, quotaCycleDays }) {
+    const client = await this.getClient({ clientId });
+    const quota = validateQuotaInput({ quotaBytes, quotaCycleDays });
+
+    if (quota.quotaBytes === null) {
+      client.quotaBytes = null;
+      client.quotaCycleDays = null;
+      client.quotaCycleStartAt = null;
+      client.quotaUsedBytes = 0;
+      client.quotaExceeded = false;
+    } else {
+      const hadQuota = typeof client.quotaBytes === 'number' && client.quotaBytes > 0;
+      client.quotaBytes = quota.quotaBytes;
+      client.quotaCycleDays = quota.quotaCycleDays;
+      if (!hadQuota) {
+        client.quotaCycleStartAt = new Date();
+        client.quotaUsedBytes = 0;
+        client.quotaExceeded = false;
+      }
+    }
+    client.updatedAt = new Date();
+
+    await this.saveConfig();
+  }
+
+  async resetClientQuota({ clientId }) {
+    const client = await this.getClient({ clientId });
+
+    client.quotaUsedBytes = 0;
+    client.quotaCycleStartAt = new Date();
+    client.quotaExceeded = false;
+    const expired = client.expiredAt != null && new Date() > new Date(client.expiredAt);
+    if (!expired) {
+      client.enabled = true;
+    }
+    client.updatedAt = new Date();
+
+    await this.saveConfig();
+  }
+
   async updateClientAddress({ clientId, address }) {
     const client = await this.getClient({ clientId });
 
@@ -415,6 +490,12 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     }
     if (shouldEnable) {
       client.enabled = true;
+    }
+    const renewsClient = expireDate != null && new Date(expireDate) > new Date();
+    if (renewsClient && client.quotaBytes) {
+      client.quotaUsedBytes = 0;
+      client.quotaCycleStartAt = new Date();
+      client.quotaExceeded = false;
     }
     client.updatedAt = new Date();
 
@@ -459,6 +540,56 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
           needSaveConfig = true;
           client.enabled = false;
           client.updatedAt = new Date();
+        }
+      }
+      // Quota Feature (always on; per-client, unlimited by default)
+      const quotaClients = Object.values(config.clients)
+        .filter((client) => typeof client.quotaBytes === 'number' && client.quotaBytes > 0);
+      if (quotaClients.length > 0) {
+        // 1. Cycle rollover
+        for (const client of quotaClients) {
+          if (!isCycleDue(client)) continue;
+          debug(`Client ${client.id} quota cycle rolled over.`);
+          needSaveConfig = true;
+          client.quotaUsedBytes = 0;
+          client.quotaCycleStartAt = new Date();
+          if (client.quotaExceeded) {
+            client.quotaExceeded = false;
+            const expired = client.expiredAt != null && new Date() > new Date(client.expiredAt);
+            if (!expired && client.enabled !== true) {
+              client.enabled = true;
+            }
+          }
+          client.updatedAt = new Date();
+        }
+        // 2. Accrue transfer deltas
+        const dump = await Util.exec('wg show wg0 dump', { log: false });
+        const counters = new Map();
+        dump.trim().split('\n').slice(1).forEach((line) => {
+          const [publicKey,,,,, transferRx, transferTx] = line.split('\t');
+          counters.set(publicKey, { rx: Number(transferRx), tx: Number(transferTx) });
+        });
+        for (const client of quotaClients) {
+          const current = counters.get(client.publicKey);
+          if (!current) continue;
+          const delta = transferDelta(client.quotaLastRx, client.quotaLastTx, current.rx, current.tx);
+          client.quotaLastRx = current.rx;
+          client.quotaLastTx = current.tx;
+          if (delta > 0) {
+            needSaveConfig = true;
+            client.quotaUsedBytes = (client.quotaUsedBytes ?? 0) + delta;
+          }
+        }
+        // 3. Disable on exceed
+        for (const client of quotaClients) {
+          if (client.enabled !== true || client.quotaExceeded) continue;
+          if (isQuotaExceeded(client)) {
+            debug(`Client ${client.id} quota exceeded.`);
+            needSaveConfig = true;
+            client.enabled = false;
+            client.quotaExceeded = true;
+            client.updatedAt = new Date();
+          }
         }
       }
       // One Time Link Feature
