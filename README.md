@@ -35,7 +35,7 @@
 
 ### One-line installer (recommended)
 
-On any fresh Linux VPS, as root:
+Run on your Linux as root:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/cmtrswtng/amnezia-wg-ui/master/install.sh)
