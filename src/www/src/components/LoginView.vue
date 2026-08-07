@@ -1,10 +1,6 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4 relative">
-    <div
-      class="absolute w-96 h-96 rounded-full blur-3xl opacity-30
-        bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600"
-    />
-    <form class="glass relative w-full max-w-sm p-8 flex flex-col gap-4" @submit.prevent="submit">
+  <div class="min-h-screen flex items-center justify-center p-4">
+    <form class="glass w-full max-w-sm p-8 flex flex-col gap-4" @submit.prevent="submit">
       <h1 class="text-xl font-semibold text-center text-zinc-100">AmneziaWG Easy</h1>
       <input
         v-model="password"
@@ -14,7 +10,7 @@
         autofocus
       />
       <label v-if="rememberMeEnabled" class="flex items-center gap-2 text-sm text-zinc-400">
-        <input v-model="remember" type="checkbox" class="rounded accent-indigo-500" />
+        <input v-model="remember" type="checkbox" class="rounded accent-zinc-300" />
         {{ $t('rememberMe') }}
       </label>
       <button type="submit" class="glass-button-primary justify-center" :disabled="!password || authenticating">

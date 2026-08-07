@@ -4,10 +4,10 @@
       <span
         v-for="(tag, index) in modelValue"
         :key="tag"
-        class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-indigo-200"
+        class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-white/5 border border-white/[0.08] text-zinc-400"
       >
         {{ tag }}
-        <button type="button" class="hover:text-white" @click.stop="remove(index)">×</button>
+        <button type="button" class="text-zinc-500 hover:text-white" @click.stop="remove(index)">×</button>
       </span>
       <input
         ref="inputEl"
@@ -25,7 +25,7 @@
         v-for="suggestion in filteredSuggestions"
         :key="suggestion"
         type="button"
-        class="text-xs px-2 py-0.5 rounded-full border border-white/10 text-zinc-400 hover:text-zinc-100 hover:bg-white/10"
+        class="text-[11px] px-2 py-0.5 rounded-md border border-white/[0.08] text-zinc-500 hover:text-zinc-100 hover:bg-white/5"
         @click="add(suggestion)"
       >+ {{ suggestion }}</button>
     </div>

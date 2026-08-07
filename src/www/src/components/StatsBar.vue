@@ -1,21 +1,21 @@
 <template>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-    <div class="glass p-4 border-t-2 border-t-indigo-400/40">
-      <div class="text-2xl font-semibold bg-gradient-to-r from-indigo-300 to-violet-300 bg-clip-text text-transparent">{{ total }}</div>
-      <div class="text-xs text-zinc-400">{{ $t('totalClients') }}</div>
-    </div>
-    <div class="glass p-4 border-t-2 border-t-emerald-400/40">
-      <div class="text-2xl font-semibold text-emerald-400">{{ active }}</div>
-      <div class="text-xs text-zinc-400">{{ $t('activeClients') }}</div>
-    </div>
-    <div class="glass p-4 border-t-2" :class="expired ? 'border-t-red-400/40' : 'border-t-white/10'">
-      <div class="text-2xl font-semibold" :class="expired ? 'text-red-400' : 'text-zinc-100'">{{ expired }}</div>
-      <div class="text-xs text-zinc-400">{{ $t('expiredClients') }}</div>
+    <div class="glass p-4">
+      <div class="text-xl font-semibold text-zinc-50">{{ total }}</div>
+      <div class="text-[11px] uppercase tracking-wider text-zinc-500 mt-1">{{ $t('totalClients') }}</div>
     </div>
     <div class="glass p-4">
-      <div class="text-sm font-medium text-zinc-100">↓ {{ formatBytes(totalRx) }}</div>
-      <div class="text-sm font-medium text-zinc-100">↑ {{ formatBytes(totalTx) }}</div>
-      <div class="text-xs text-zinc-400">{{ $t('traffic') }}</div>
+      <div class="text-xl font-semibold text-zinc-50">{{ active }}</div>
+      <div class="text-[11px] uppercase tracking-wider text-zinc-500 mt-1">{{ $t('activeClients') }}</div>
+    </div>
+    <div class="glass p-4">
+      <div class="text-xl font-semibold" :class="expired ? 'text-red-400' : 'text-zinc-50'">{{ expired }}</div>
+      <div class="text-[11px] uppercase tracking-wider text-zinc-500 mt-1">{{ $t('expiredClients') }}</div>
+    </div>
+    <div class="glass p-4">
+      <div class="text-sm font-medium text-zinc-50">↓ {{ formatBytes(totalRx) }}</div>
+      <div class="text-sm font-medium text-zinc-50">↑ {{ formatBytes(totalTx) }}</div>
+      <div class="text-[11px] uppercase tracking-wider text-zinc-500 mt-1">{{ $t('traffic') }}</div>
     </div>
   </div>
 </template>

@@ -3,9 +3,12 @@
     <div
       v-for="toast in toasts"
       :key="toast.id"
-      class="glass px-4 py-3 text-sm shadow-lg"
-      :class="toast.type === 'error' ? 'border-red-400/40 text-red-200' : 'border-emerald-400/40 text-emerald-100'"
+      class="rounded-[10px] bg-[#131316] border border-white/[0.08] shadow-[0_16px_48px_rgba(0,0,0,0.5)] px-4 py-3 text-sm text-zinc-200 flex items-center gap-2.5"
     >
+      <span
+        class="w-1.5 h-1.5 rounded-full shrink-0"
+        :class="toast.type === 'error' ? 'bg-red-400' : 'bg-emerald-400'"
+      />
       {{ toast.message }}
     </div>
   </div>

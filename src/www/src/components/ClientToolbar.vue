@@ -20,13 +20,13 @@
           {{ $t('filterByTags') }}
           <span
             v-if="tags.length"
-            class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full
-              bg-indigo-500/25 border border-indigo-400/40 text-indigo-200 text-[0.65rem] font-semibold"
+            class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-md
+              bg-white/5 border border-white/[0.08] text-zinc-400 text-[0.65rem] font-medium"
           >{{ tags.length }}</span>
         </button>
         <div
           v-if="open"
-          class="absolute right-0 z-30 mt-2 w-56 glass p-2 max-h-60 overflow-y-auto flex flex-col gap-1"
+          class="absolute right-0 z-30 mt-2 w-56 rounded-[10px] bg-[#131316] border border-white/[0.08] p-2 max-h-60 overflow-y-auto flex flex-col gap-1"
         >
           <label
             v-for="tag in allTags"
@@ -35,7 +35,7 @@
           >
             <input
               type="checkbox"
-              class="rounded accent-indigo-500"
+              class="rounded accent-zinc-300"
               :checked="tags.includes(tag)"
               @change="toggleTag(tag)"
             />
@@ -62,13 +62,13 @@
       <span
         v-for="tag in tags"
         :key="tag"
-        class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
-          bg-indigo-500/15 border border-indigo-400/30 text-indigo-200"
+        class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md
+          bg-white/5 border border-white/[0.08] text-zinc-400"
       >
         {{ tag }}
         <button
           type="button"
-          class="text-indigo-300 hover:text-white leading-none"
+          class="text-zinc-500 hover:text-white leading-none"
           :aria-label="`Remove ${tag}`"
           @click="toggleTag(tag)"
         >&times;</button>

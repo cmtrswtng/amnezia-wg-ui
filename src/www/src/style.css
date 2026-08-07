@@ -8,20 +8,16 @@
   }
 
   body {
-    @apply text-zinc-200 antialiased;
+    @apply text-zinc-300 antialiased;
     font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    background-color: #06060c;
-    background-image:
-      radial-gradient(ellipse 60% 50% at 15% 0%, rgba(79, 70, 229, 0.15), transparent),
-      radial-gradient(ellipse 50% 40% at 85% 10%, rgba(139, 92, 246, 0.10), transparent),
-      radial-gradient(ellipse 60% 50% at 50% 100%, rgba(217, 70, 239, 0.06), transparent);
-    background-attachment: fixed;
+    font-size: 14px;
+    background-color: #0a0a0b;
   }
 
   /* Native <select> dropdowns inherit the OS light theme; force dark options */
   select option,
   select optgroup {
-    background-color: #16161f;
+    background-color: #131316;
     color: #e4e4e7;
   }
 
@@ -50,50 +46,54 @@
 
 @layer components {
   .glass {
-    @apply rounded-2xl;
-    background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.07);
   }
 
   .glass-hoverable {
-    @apply transition-all hover:-translate-y-0.5;
+    @apply transition-colors;
   }
 
   .glass-hoverable:hover {
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.14);
   }
 
   .glass-input {
-    @apply rounded-xl px-3 py-2 text-sm text-zinc-100
+    @apply rounded-lg px-3 py-2 text-sm text-zinc-100
       placeholder-zinc-500 outline-none transition-colors;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.09);
   }
 
   .glass-input:focus {
-    border-color: rgba(129, 140, 248, 0.6);
-    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.25);
+    border-color: rgba(255, 255, 255, 0.28);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
   }
 
   .glass-button {
-    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium
-      bg-white/5 border border-white/10 text-zinc-200 hover:bg-white/10 transition-colors
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium
+      text-zinc-300 transition-colors
       disabled:opacity-50 disabled:pointer-events-none;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-button:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.16);
   }
 
   .glass-button-primary {
-    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium
-      text-white transition-all
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium
+      transition-colors
       disabled:opacity-50 disabled:pointer-events-none;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+    background: #fafafa;
+    color: #0a0a0b;
+    border: 1px solid transparent;
   }
 
   .glass-button-primary:hover {
-    filter: brightness(1.1);
+    background: #e4e4e7;
   }
 }
