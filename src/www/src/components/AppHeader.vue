@@ -1,0 +1,40 @@
+<template>
+  <header class="glass flex items-center gap-3 px-4 py-3">
+    <h1 class="text-lg font-semibold text-zinc-100 mr-auto">AmneziaWG Easy</h1>
+
+    <select
+      class="glass-input !py-1.5 text-xs"
+      :value="locale"
+      @change="changeLocale($event.target.value)"
+    >
+      <option v-for="l in availableLocales" :key="l" :value="l">{{ l }}</option>
+    </select>
+
+    <button class="glass-button" :title="$t('backup')" @click="$emit('backup')">
+      ⭳ {{ $t('backup') }}
+    </button>
+    <label class="glass-button cursor-pointer" :title="$t('restore')">
+      ⭱ {{ $t('restore') }}
+      <input type="file" accept=".json,application/json" class="hidden" @change="onRestoreFile" />
+    </label>
+    <button class="glass-button" @click="$emit('logout')">{{ $t('logout') }}</button>
+  </header>
+</template>
+
+<script setup>
+import { useI18n } from 'vue-i18n';
+
+const emit = defineEmits(['backup', 'restore', 'logout']);
+const { locale, availableLocales } = useI18n();
+
+function changeLocale(l) {
+  locale.value = l;
+  localStorage.setItem('lang', l);
+}
+
+function onRestoreFile(event) {
+  const file = event.target.files?.[0];
+  if (file) emit('restore', file);
+  event.target.value = '';
+}
+</script>
