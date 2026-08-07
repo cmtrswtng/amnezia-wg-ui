@@ -205,8 +205,12 @@ module.exports = class Server {
         return config;
       }))
       .post('/api/wireguard/client', defineEventHandler(async (event) => {
-        const { name, expiredDate, tags } = await readBody(event);
-        await WireGuard.createClient({ name, expiredDate, tags });
+        const {
+          name, expiredDate, tags, quotaBytes, quotaCycleDays,
+        } = await readBody(event);
+        await WireGuard.createClient({
+          name, expiredDate, tags, quotaBytes, quotaCycleDays,
+        });
         return { success: true };
       }))
       .delete('/api/wireguard/client/:clientId', defineEventHandler(async (event) => {
@@ -278,6 +282,23 @@ module.exports = class Server {
         }
         const { tags } = await readBody(event);
         await WireGuard.setClientTags({ clientId, tags });
+        return { success: true };
+      }))
+      .put('/api/wireguard/client/:clientId/quota', defineEventHandler(async (event) => {
+        const clientId = getRouterParam(event, 'clientId');
+        if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
+          throw createError({ status: 403 });
+        }
+        const { quotaBytes, quotaCycleDays } = await readBody(event);
+        await WireGuard.setClientQuota({ clientId, quotaBytes, quotaCycleDays });
+        return { success: true };
+      }))
+      .post('/api/wireguard/client/:clientId/quotaReset', defineEventHandler(async (event) => {
+        const clientId = getRouterParam(event, 'clientId');
+        if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
+          throw createError({ status: 403 });
+        }
+        await WireGuard.resetClientQuota({ clientId });
         return { success: true };
       }));
 
