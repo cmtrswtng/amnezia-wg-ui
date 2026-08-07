@@ -63,6 +63,23 @@ export function useClients() {
     }
   }
 
+  async function bulk(ids, fn) {
+    let done = 0;
+    let failed = 0;
+    for (const id of ids) {
+      const client = (clients.value ?? []).find((c) => c.id === id);
+      if (!client) { failed++; continue; }
+      try {
+        await fn(client);
+        done++;
+      } catch {
+        failed++;
+      }
+    }
+    await refresh().catch(() => {});
+    return { done, failed };
+  }
+
   async function mutate(promise) {
     try {
       await promise;
@@ -79,6 +96,7 @@ export function useClients() {
     refresh,
     startPolling,
     stopPolling,
+    bulk,
     createClient: (payload) => mutate(api.createClient(payload)),
     deleteClient: (id) => mutate(api.deleteClient(id)),
     enableClient: (id) => mutate(api.enableClient(id)),

@@ -1,6 +1,11 @@
 <template>
   <div class="glass px-4 py-3">
     <div class="flex flex-wrap items-center gap-2">
+      <label class="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer select-none">
+        <input type="checkbox" class="accent-[#38bdf8]" :checked="allSelected" @change="$emit('toggleSelectAll')" />
+        {{ $t('selectAll') }}
+      </label>
+
       <input
         v-model="search"
         type="search"
@@ -90,9 +95,10 @@ const sortAsc = defineModel('sortAsc', { type: Boolean, default: true });
 defineProps({
   allTags: { type: Array, default: () => [] },
   sortClients: { type: Boolean, default: false },
+  allSelected: { type: Boolean, default: false },
 });
 
-defineEmits(['create']);
+defineEmits(['create', 'toggleSelectAll']);
 
 const open = ref(false);
 const tagDropdown = ref(null);

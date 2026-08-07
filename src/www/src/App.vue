@@ -13,7 +13,23 @@
         v-model:sort-asc="sortAsc"
         :all-tags="allTags"
         :sort-clients="settings.sortClients"
+        :all-selected="allFilteredSelected"
         @create="openCreate"
+        @toggle-select-all="onToggleSelectAll"
+      />
+
+      <BulkBar
+        v-if="selectedClients.length"
+        :count="selectedClients.length"
+        :removable-tags="removableTags"
+        @extend="onBulkExtend"
+        @add-tag="onBulkAddTag"
+        @remove-tag="onBulkRemoveTag"
+        @enable="onBulkEnable"
+        @disable="onBulkDisable"
+        @reset-quota="onBulkResetQuota"
+        @delete="confirmBulkDelete = true"
+        @clear="selectedIds = []"
       />
 
       <div v-if="clients === null" class="glass p-6 text-sm text-zinc-400">Loading…</div>
@@ -28,12 +44,14 @@
           :avatar-settings="settings.avatarSettings"
           :one-time-links="settings.oneTimeLinks"
           :chart-type="settings.uiChartType"
+          :selected="selectedIds.includes(client.id)"
           @toggle="onToggle"
           @edit="openEdit"
           @delete="deletingClient = $event"
           @show-qr="qrClient = $event"
           @one-time-link="onOneTimeLink"
           @reset-quota="onResetQuota"
+          @toggle-select="onToggleSelect"
         />
       </div>
 
@@ -58,6 +76,15 @@
           @cancel="deletingClient = null"
         />
       </Transition>
+      <Transition name="modal">
+        <ConfirmDialog
+          v-if="confirmBulkDelete"
+          :title="$t('bulkDelete')"
+          :message="$t('confirmBulkDelete', { count: selectedClients.length })"
+          @confirm="confirmBulkDelete = false; onBulkDelete()"
+          @cancel="confirmBulkDelete = false"
+        />
+      </Transition>
     </div>
     <Toasts />
   </div>
@@ -69,6 +96,7 @@ import { useI18n } from 'vue-i18n';
 
 import { api } from './api/client';
 import AppHeader from './components/AppHeader.vue';
+import BulkBar from './components/BulkBar.vue';
 import ClientCard from './components/ClientCard.vue';
 import ClientForm from './components/ClientForm.vue';
 import ClientToolbar from './components/ClientToolbar.vue';
@@ -98,6 +126,7 @@ const {
   disableClient,
   generateOneTimeLink,
   resetQuota,
+  bulk,
 } = useClients();
 const { allTags } = useTags();
 const toasts = useToasts();
@@ -111,6 +140,9 @@ const showForm = ref(false);
 const editingClient = ref(null);
 const qrClient = ref(null);
 const deletingClient = ref(null);
+
+const selectedIds = ref([]);
+const confirmBulkDelete = ref(false);
 
 function statusOf(client) {
   if (client.quotaExceeded) return 'quota';
@@ -142,6 +174,56 @@ const filteredClients = computed(() => {
 
   return list;
 });
+
+const selectedClients = computed(() => {
+  const visible = new Set((clients.value ?? []).map((c) => c.id));
+  return (clients.value ?? []).filter((c) => selectedIds.value.includes(c.id) && visible.has(c.id));
+});
+
+const allFilteredSelected = computed(() => {
+  const list = filteredClients.value;
+  return list.length > 0 && list.every((c) => selectedIds.value.includes(c.id));
+});
+
+const removableTags = computed(() => {
+  const set = new Set();
+  for (const c of selectedClients.value) for (const t of c.tags ?? []) set.add(t);
+  return [...set].sort((a, b) => a.localeCompare(b));
+});
+
+function onToggleSelect(client) {
+  selectedIds.value = selectedIds.value.includes(client.id)
+    ? selectedIds.value.filter((id) => id !== client.id)
+    : [...selectedIds.value, client.id];
+}
+
+function onToggleSelectAll() {
+  selectedIds.value = allFilteredSelected.value ? [] : filteredClients.value.map((c) => c.id);
+}
+
+async function runBulk(fn) {
+  const ids = selectedClients.value.map((c) => c.id);
+  const { done, failed } = await bulk(ids, fn);
+  selectedIds.value = [];
+  if (failed === 0) toasts.success(t('bulkDone', { done, failed }));
+  else toasts.error(t('bulkDone', { done, failed }));
+}
+
+function onBulkExtend(days) {
+  runBulk((client) => {
+    const base = client.expiredAt && new Date(client.expiredAt) > new Date()
+      ? new Date(client.expiredAt)
+      : new Date();
+    return api.updateClientExpireDate(client.id, new Date(base.getTime() + days * 86400000).toISOString());
+  });
+}
+
+const onBulkAddTag = (tag) => runBulk((client) => api.updateClientTags(client.id, [...new Set([...(client.tags ?? []), tag])]));
+const onBulkRemoveTag = (tag) => runBulk((client) => api.updateClientTags(client.id, (client.tags ?? []).filter((x) => x !== tag)));
+const onBulkEnable = () => runBulk((client) => api.enableClient(client.id));
+const onBulkDisable = () => runBulk((client) => api.disableClient(client.id));
+const onBulkResetQuota = () => runBulk((client) => (client.quotaBytes != null ? api.resetClientQuota(client.id) : Promise.resolve()));
+const onBulkDelete = () => runBulk((client) => api.deleteClient(client.id));
 
 // React to auth state transitions: load data and start polling on login,
 // stop polling on logout or session expiry (api:unauthorized).

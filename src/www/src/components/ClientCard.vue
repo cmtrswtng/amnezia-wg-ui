@@ -1,6 +1,12 @@
 <template>
   <div class="glass glass-hoverable p-4 flex flex-col gap-3">
     <div class="flex items-start gap-3">
+      <input
+        type="checkbox"
+        class="mt-1 shrink-0 accent-[#38bdf8]"
+        :checked="selected"
+        @change="$emit('toggleSelect', client)"
+      />
       <img v-if="avatar" :src="avatar" class="w-10 h-10 rounded-full shrink-0" alt="" />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
@@ -84,9 +90,10 @@ const props = defineProps({
   avatarSettings: { type: Object, default: () => ({ dicebear: null, gravatar: false }) },
   oneTimeLinks: { type: Boolean, default: false },
   chartType: { type: Number, default: 0 },
+  selected: { type: Boolean, default: false },
 });
 
-defineEmits(['toggle', 'edit', 'delete', 'showQr', 'oneTimeLink', 'resetQuota']);
+defineEmits(['toggle', 'edit', 'delete', 'showQr', 'oneTimeLink', 'resetQuota', 'toggleSelect']);
 
 const { locale } = useI18n();
 
