@@ -1,5 +1,5 @@
 <template>
-  <header class="sticky top-0 z-30 flex items-center gap-3 -mx-4 px-4 py-3 border-b border-white/[0.06]">
+  <header class="sticky top-0 z-30 flex items-center gap-3 -mx-4 px-4 py-3 border-b border-white/[0.06] backdrop-blur">
     <h1 class="text-sm font-semibold text-zinc-50 mr-auto">AmneziaWG Easy</h1>
 
     <select
@@ -17,6 +17,9 @@
       ⭱ <span class="hidden sm:inline">{{ $t('restore') }}</span>
       <input type="file" accept=".json,application/json" class="hidden" @change="onRestoreFile" />
     </label>
+    <button class="glass-button" :title="$t('auditLog')" @click="$emit('audit')">
+      ▤ <span class="hidden sm:inline">{{ $t('auditLog') }}</span>
+    </button>
     <button v-if="requiresPassword" class="glass-button" :title="$t('logout')" @click="$emit('logout')">
       ⎋ <span class="hidden sm:inline">{{ $t('logout') }}</span>
     </button>
@@ -28,7 +31,7 @@ import { useI18n } from 'vue-i18n';
 
 import { useSession } from '../composables/useSession';
 
-const emit = defineEmits(['backup', 'restore', 'logout']);
+const emit = defineEmits(['backup', 'restore', 'audit', 'logout']);
 const { locale, availableLocales } = useI18n();
 const { requiresPassword } = useSession();
 

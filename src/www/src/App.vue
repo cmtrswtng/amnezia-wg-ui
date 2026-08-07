@@ -2,7 +2,7 @@
   <div class="min-h-screen">
     <LoginView v-if="authenticated === false" />
     <div v-else-if="authenticated === true" class="mx-auto max-w-6xl px-4 py-6 pb-36 sm:pb-6 flex flex-col gap-5">
-      <AppHeader @backup="onBackup" @restore="onRestore" @logout="onLogout" />
+      <AppHeader @backup="onBackup" @restore="onRestore" @audit="showAudit = true" @logout="onLogout" />
 
       <StatsBar :clients="clients" />
 
@@ -70,6 +70,9 @@
         <QrModal v-if="qrClient" :client="qrClient" @close="qrClient = null" />
       </Transition>
       <Transition name="modal">
+        <AuditModal v-if="showAudit" @close="showAudit = false" />
+      </Transition>
+      <Transition name="modal">
         <ConfirmDialog
           v-if="deletingClient"
           :title="$t('deleteClient')"
@@ -98,6 +101,7 @@ import { useI18n } from 'vue-i18n';
 
 import { api } from './api/client';
 import AppHeader from './components/AppHeader.vue';
+import AuditModal from './components/AuditModal.vue';
 import BulkBar from './components/BulkBar.vue';
 import ClientCard from './components/ClientCard.vue';
 import ClientForm from './components/ClientForm.vue';
@@ -143,6 +147,7 @@ const showForm = ref(false);
 const editingClient = ref(null);
 const qrClient = ref(null);
 const deletingClient = ref(null);
+const showAudit = ref(false);
 
 const selectedIds = ref([]);
 const confirmBulkDelete = ref(false);

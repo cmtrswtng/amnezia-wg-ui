@@ -56,6 +56,7 @@ export const api = {
   generateOneTimeLink: (id) => call('POST', `/api/wireguard/client/${id}/generateOneTimeLink`),
   backup: () => call('GET', '/api/wireguard/backup'),
   restore: (file) => call('PUT', '/api/wireguard/restore', { file }),
+  getAudit: (limit = 200) => call('GET', `/api/wireguard/audit?limit=${limit}`),
 
   qrCodeUrl: (id) => `/api/wireguard/client/${id}/qrcode.svg`,
   configurationUrl: (id) => `/api/wireguard/client/${id}/configuration`,
