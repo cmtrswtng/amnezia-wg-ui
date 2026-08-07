@@ -71,7 +71,7 @@ watch(
     name.value = client?.name ?? '';
     expireValue.value = toLocalInputValue(client?.expiredAt);
     tags.value = [...(client?.tags ?? [])];
-    quotaGb.value = client?.quotaBytes != null ? client.quotaBytes / (1024 ** 3) : '';
+    quotaGb.value = client?.quotaBytes != null ? Math.round((client.quotaBytes / (1024 ** 3)) * 100) / 100 : '';
     quotaCycleDays.value = client?.quotaCycleDays ?? 30;
   },
   { immediate: true },

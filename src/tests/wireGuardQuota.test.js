@@ -78,6 +78,63 @@ describe('setClientQuota', () => {
     await expect(wg.setClientQuota({ clientId: 'id-1', quotaBytes: -1 }))
       .rejects.toThrowError(expect.objectContaining({ statusCode: 400 }));
   });
+
+  it('resets stale quota counters when a quota is cleared and re-added', async () => {
+    const { wg, config } = makeWireGuard({
+      'id-1': makeClient({
+        quotaBytes: 1024,
+        quotaCycleDays: 30,
+        quotaLastRx: 1000,
+        quotaLastTx: 1000,
+      }),
+    });
+
+    await wg.setClientQuota({ clientId: 'id-1', quotaBytes: null });
+    await wg.setClientQuota({ clientId: 'id-1', quotaBytes: 2048, quotaCycleDays: 30 });
+
+    const client = config.clients['id-1'];
+    expect(client.quotaLastRx).toBeNull();
+    expect(client.quotaLastTx).toBeNull();
+  });
+
+  it('re-enables an exhausted client when the limit is raised', async () => {
+    const { wg, config } = makeWireGuard({
+      'id-1': makeClient({
+        enabled: false,
+        quotaExceeded: true,
+        quotaBytes: 100,
+        quotaUsedBytes: 100,
+        quotaCycleDays: 30,
+        quotaCycleStartAt: new Date(),
+      }),
+    });
+
+    await wg.setClientQuota({ clientId: 'id-1', quotaBytes: 200, quotaCycleDays: 30 });
+
+    const client = config.clients['id-1'];
+    expect(client.quotaExceeded).toBe(false);
+    expect(client.enabled).toBe(true);
+  });
+
+  it('does not re-enable an exhausted client that is expired', async () => {
+    const { wg, config } = makeWireGuard({
+      'id-1': makeClient({
+        enabled: false,
+        expiredAt: new Date(Date.now() - 60_000),
+        quotaExceeded: true,
+        quotaBytes: 100,
+        quotaUsedBytes: 100,
+        quotaCycleDays: 30,
+        quotaCycleStartAt: new Date(),
+      }),
+    });
+
+    await wg.setClientQuota({ clientId: 'id-1', quotaBytes: 200, quotaCycleDays: 30 });
+
+    const client = config.clients['id-1'];
+    expect(client.quotaExceeded).toBe(false);
+    expect(client.enabled).toBe(false);
+  });
 });
 
 describe('cron quota accounting', () => {

@@ -435,6 +435,8 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
       client.quotaCycleStartAt = null;
       client.quotaUsedBytes = 0;
       client.quotaExceeded = false;
+      client.quotaLastRx = null;
+      client.quotaLastTx = null;
     } else {
       const hadQuota = typeof client.quotaBytes === 'number' && client.quotaBytes > 0;
       client.quotaBytes = quota.quotaBytes;
@@ -443,6 +445,14 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
         client.quotaCycleStartAt = new Date();
         client.quotaUsedBytes = 0;
         client.quotaExceeded = false;
+        client.quotaLastRx = null;
+        client.quotaLastTx = null;
+      } else if (client.quotaExceeded && !isQuotaExceeded(client)) {
+        client.quotaExceeded = false;
+        const expired = client.expiredAt != null && new Date() > new Date(client.expiredAt);
+        if (!expired) {
+          client.enabled = true;
+        }
       }
     }
     client.updatedAt = new Date();
