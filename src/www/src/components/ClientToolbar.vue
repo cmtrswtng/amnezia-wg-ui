@@ -9,7 +9,7 @@
       <input
         v-model="search"
         type="search"
-        class="glass-input flex-1 min-w-[10rem]"
+        class="glass-input w-full sm:flex-1 sm:w-auto"
         :placeholder="$t('search')"
       />
 
@@ -61,7 +61,7 @@
         {{ sortAsc ? 'A→Z' : 'Z→A' }}
       </button>
 
-      <button class="glass-button-primary ml-auto" @click="$emit('create')">
+      <button class="glass-button-primary w-full sm:w-auto sm:ml-auto" @click="$emit('create')">
         + {{ $t('newClient') }}
       </button>
     </div>

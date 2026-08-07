@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen">
     <LoginView v-if="authenticated === false" />
-    <div v-else-if="authenticated === true" class="mx-auto max-w-6xl px-4 py-6 flex flex-col gap-5">
+    <div v-else-if="authenticated === true" class="mx-auto max-w-6xl px-4 py-6 pb-20 sm:pb-6 flex flex-col gap-5">
       <AppHeader @backup="onBackup" @restore="onRestore" @logout="onLogout" />
 
       <StatsBar :clients="clients" />

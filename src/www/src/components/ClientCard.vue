@@ -60,17 +60,17 @@
     </div>
 
     <div class="flex flex-wrap gap-2 border-t border-white/[0.06] pt-3 mt-1">
-      <button class="glass-button text-xs px-2.5 py-1.5" @click="$emit('showQr', client)">{{ $t('showQR') }}</button>
-      <a class="glass-button text-xs px-2.5 py-1.5" :href="configurationUrl" download>{{ $t('downloadConfig') }}</a>
-      <button v-if="oneTimeLinks" class="glass-button text-xs px-2.5 py-1.5" @click="$emit('oneTimeLink', client)">
+      <button class="glass-button text-xs px-2.5 py-1.5 grow sm:grow-0" @click="$emit('showQr', client)">{{ $t('showQR') }}</button>
+      <a class="glass-button text-xs px-2.5 py-1.5 grow sm:grow-0" :href="configurationUrl" download>{{ $t('downloadConfig') }}</a>
+      <button v-if="oneTimeLinks" class="glass-button text-xs px-2.5 py-1.5 grow sm:grow-0" @click="$emit('oneTimeLink', client)">
         {{ $t('oneTimeLinkShort') }}
       </button>
-      <button v-if="client.quotaBytes != null" class="glass-button text-xs px-2.5 py-1.5" @click="$emit('resetQuota', client)">
+      <button v-if="client.quotaBytes != null" class="glass-button text-xs px-2.5 py-1.5 grow sm:grow-0" @click="$emit('resetQuota', client)">
         {{ $t('quotaReset') }}
       </button>
-      <button class="glass-button text-xs px-2.5 py-1.5 ml-auto" @click="$emit('edit', client)">{{ $t('editClient') }}</button>
+      <button class="glass-button text-xs px-2.5 py-1.5 grow sm:grow-0 sm:ml-auto" @click="$emit('edit', client)">{{ $t('editClient') }}</button>
       <button
-        class="glass-button text-xs px-2.5 py-1.5 !border-red-400/30 text-red-300 hover:!bg-red-500/10"
+        class="glass-button text-xs px-2.5 py-1.5 grow sm:grow-0 !border-red-400/30 text-red-300 hover:!bg-red-500/10"
         @click="$emit('delete', client)"
       >{{ $t('deleteClient') }}</button>
     </div>
