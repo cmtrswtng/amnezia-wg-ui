@@ -1,6 +1,5 @@
 'use strict';
 
-const bcrypt = require('bcryptjs');
 const crypto = require('node:crypto');
 const basicAuth = require('basic-auth');
 const { createServer } = require('node:http');
@@ -24,6 +23,7 @@ const {
 } = require('h3');
 
 const WireGuard = require('../services/WireGuard');
+const { requiresPassword, isPasswordValid, apiAuthMiddleware } = require('./Auth');
 
 const {
   PORT,
@@ -36,34 +36,13 @@ const {
   UI_CHART_TYPE,
   WG_ENABLE_ONE_TIME_LINKS,
   UI_ENABLE_SORT_CLIENTS,
-  WG_ENABLE_EXPIRES_TIME,
   ENABLE_PROMETHEUS_METRICS,
   PROMETHEUS_METRICS_PASSWORD,
   DICEBEAR_TYPE,
   USE_GRAVATAR,
 } = require('../config');
 
-const requiresPassword = !!PASSWORD_HASH;
 const requiresPrometheusPassword = !!PROMETHEUS_METRICS_PASSWORD;
-
-/**
- * Checks if `password` matches the PASSWORD_HASH.
- *
- * If environment variable is not set, the password is always invalid.
- *
- * @param {string} password String to test
- * @returns {boolean} true if matching environment, otherwise false
- */
-const isPasswordValid = (password, hash) => {
-  if (typeof password !== 'string') {
-    return false;
-  }
-  if (hash) {
-    return bcrypt.compareSync(password, hash);
-  }
-
-  return false;
-};
 
 const cronJobEveryMinute = async () => {
   await WireGuard.cronJobEveryMinute();
@@ -119,11 +98,6 @@ module.exports = class Server {
       .get('/api/ui-sort-clients', defineEventHandler((event) => {
         setHeader(event, 'Content-Type', 'application/json');
         return `${UI_ENABLE_SORT_CLIENTS}`;
-      }))
-
-      .get('/api/wg-enable-expire-time', defineEventHandler((event) => {
-        setHeader(event, 'Content-Type', 'application/json');
-        return `${WG_ENABLE_EXPIRES_TIME}`;
       }))
 
       .get('/api/ui-avatar-settings', defineEventHandler((event) => {
@@ -193,31 +167,8 @@ module.exports = class Server {
         return { success: true };
       }));
 
-    // WireGuard
-    app.use(
-      fromNodeMiddleware((req, res, next) => {
-        if (!requiresPassword || !req.url.startsWith('/api/')) {
-          return next();
-        }
-
-        if (req.session && req.session.authenticated) {
-          return next();
-        }
-
-        if (req.url.startsWith('/api/') && req.headers['authorization']) {
-          if (isPasswordValid(req.headers['authorization'], PASSWORD_HASH)) {
-            return next();
-          }
-          return res.status(401).json({
-            error: 'Incorrect Password',
-          });
-        }
-
-        return res.status(401).json({
-          error: 'Not Logged In',
-        });
-      }),
-    );
+    // WireGuard API authentication (see lib/Auth.js)
+    app.use(fromNodeMiddleware(apiAuthMiddleware));
 
     const router2 = createRouter();
     app.use(router2);
@@ -254,9 +205,8 @@ module.exports = class Server {
         return config;
       }))
       .post('/api/wireguard/client', defineEventHandler(async (event) => {
-        const { name } = await readBody(event);
-        const { expiredDate } = await readBody(event);
-        await WireGuard.createClient({ name, expiredDate });
+        const { name, expiredDate, tags } = await readBody(event);
+        await WireGuard.createClient({ name, expiredDate, tags });
         return { success: true };
       }))
       .delete('/api/wireguard/client/:clientId', defineEventHandler(async (event) => {
@@ -319,6 +269,15 @@ module.exports = class Server {
         }
         const { expireDate } = await readBody(event);
         await WireGuard.updateClientExpireDate({ clientId, expireDate });
+        return { success: true };
+      }))
+      .put('/api/wireguard/client/:clientId/tags', defineEventHandler(async (event) => {
+        const clientId = getRouterParam(event, 'clientId');
+        if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
+          throw createError({ status: 403 });
+        }
+        const { tags } = await readBody(event);
+        await WireGuard.setClientTags({ clientId, tags });
         return { success: true };
       }));
 
