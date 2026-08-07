@@ -33,7 +33,19 @@
 
 ## Installation
 
-### 1. Install Docker
+### One-line installer (recommended)
+
+On any fresh Linux VPS, as root:
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/cmtrswtng/amnezia-wg-ui/master/install.sh)
+```
+
+The script installs Docker if needed, asks for the server's public IP and an admin password
+(twice, hidden input), writes `/opt/amnezia-wg-ui/{.env,docker-compose.yml}`, opens the
+firewall ports and starts the container. Re-run it anytime to update.
+
+### 1. Install Docker (manual way)
 
 ```bash
 curl -sSL https://get.docker.com | sh
