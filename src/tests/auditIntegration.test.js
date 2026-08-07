@@ -3,6 +3,7 @@
 /* global describe, it, expect, vi, beforeEach */
 
 const AuditLog = require('../services/AuditLog');
+const Util = require('../lib/Util');
 const WireGuard = require('../lib/WireGuard');
 
 const makeWireGuard = (clients) => {
@@ -27,6 +28,7 @@ const makeClient = (overrides = {}) => ({
 
 beforeEach(() => {
   AuditLog.log = vi.fn(async () => {});
+  Util.exec = vi.fn(async () => '');
 });
 
 describe('audit instrumentation', () => {
