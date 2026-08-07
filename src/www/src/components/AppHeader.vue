@@ -1,6 +1,6 @@
 <template>
   <header class="sticky top-0 z-30 flex items-center gap-3 -mx-4 px-4 py-3 border-b border-white/[0.06] backdrop-blur">
-    <h1 class="text-sm font-semibold text-zinc-50 mr-auto">AmneziaWG Easy</h1>
+    <h1 class="text-sm font-semibold text-zinc-50 mr-auto">AmneziaWG UI</h1>
 
     <select
       class="glass-input !py-1.5 text-xs max-w-[4.5rem]"

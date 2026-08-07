@@ -1,8 +1,8 @@
 {
   "release": {
-    "version": "14"
+    "version": "15"
   },
-  "name": "wg-easy",
+  "name": "amnezia-wg-ui",
   "version": "1.0.1",
   "description": "The easiest way to run WireGuard VPN + Web-based Admin UI.",
   "main": "server.js",
