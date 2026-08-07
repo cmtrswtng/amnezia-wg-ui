@@ -70,8 +70,11 @@ docker pull "$IMAGE" >/dev/null
 
 HASH="$(docker run --rm "$IMAGE" wgpw "$pass1" | sed -n "s/^PASSWORD_HASH='\(.*\)'\$/\1/p")"
 [[ -n "$HASH" ]] || err "Failed to generate the password hash."
-unset pass1 pass2
 ok "Password hash generated."
+
+# Docker Compose (2.24+) expands $VAR inside .env files; bcrypt hashes are
+# full of '$', so escape them as '$$' — otherwise the hash gets mangled.
+ESCAPED_HASH="${HASH//\$/\$\$}"
 
 # --- Files --------------------------------------------------------------------
 mkdir -p "$INSTALL_DIR"
@@ -81,7 +84,7 @@ WG_HOST=${WG_HOST}
 PORT=${PORT}
 WG_PORT=${WG_PORT}
 LANG=en
-PASSWORD_HASH=${HASH}
+PASSWORD_HASH=${ESCAPED_HASH}
 EOF
 chmod 600 "${INSTALL_DIR}/.env"
 
@@ -124,6 +127,16 @@ fi
 # --- Start ----------------------------------------------------------------------
 cd "$INSTALL_DIR"
 docker compose up -d
+
+# --- Self-check: the container must see a hash that matches the password -------
+sleep 3
+ACTUAL_HASH="$(docker exec amnezia-wg-ui printenv PASSWORD_HASH 2>/dev/null || true)"
+if [[ -n "$ACTUAL_HASH" ]] && docker exec amnezia-wg-ui wgpw "$pass1" "$ACTUAL_HASH" | grep -q 'matches'; then
+  ok "Password verified against the running container."
+else
+  err "Password verification failed — please report this. Hash in .env: ${ESCAPED_HASH:0:12}…"
+fi
+unset pass1
 
 echo
 ok "AmneziaWG UI is up!"
