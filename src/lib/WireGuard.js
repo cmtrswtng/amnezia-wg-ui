@@ -9,6 +9,7 @@ const CRC32 = require('crc-32');
 
 const Util = require('./Util');
 const ServerError = require('./ServerError');
+const { normalizeTags, isClientExpired, shouldEnableOnExpireUpdate } = require('./clientUtils');
 
 const {
   WG_PATH,
@@ -24,7 +25,6 @@ const {
   WG_POST_UP,
   WG_PRE_DOWN,
   WG_POST_DOWN,
-  WG_ENABLE_EXPIRES_TIME,
   WG_ENABLE_ONE_TIME_LINKS,
   JC,
   JMIN,
@@ -179,6 +179,8 @@ ${client.preSharedKey ? `PresharedKey = ${client.preSharedKey}\n` : ''
       expiredAt: client.expiredAt !== null
         ? new Date(client.expiredAt)
         : null,
+      tags: client.tags ?? [],
+      isExpired: isClientExpired(client),
       allowedIPs: client.allowedIPs,
       oneTimeLink: client.oneTimeLink ?? null,
       oneTimeLinkExpiresAt: client.oneTimeLinkExpiresAt ?? null,
@@ -271,7 +273,7 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     });
   }
 
-  async createClient({ name, expiredDate }) {
+  async createClient({ name, expiredDate, tags }) {
     if (!name) {
       throw new Error('Missing: Name');
     }
@@ -314,12 +316,10 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
       updatedAt: new Date(),
       expiredAt: null,
       enabled: true,
+      tags: normalizeTags(tags),
     };
     if (expiredDate) {
       client.expiredAt = new Date(expiredDate);
-      client.expiredAt.setHours(23);
-      client.expiredAt.setMinutes(59);
-      client.expiredAt.setSeconds(59);
     }
     config.clients[id] = client;
 
@@ -381,6 +381,15 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     await this.saveConfig();
   }
 
+  async setClientTags({ clientId, tags }) {
+    const client = await this.getClient({ clientId });
+
+    client.tags = normalizeTags(tags);
+    client.updatedAt = new Date();
+
+    await this.saveConfig();
+  }
+
   async updateClientAddress({ clientId, address }) {
     const client = await this.getClient({ clientId });
 
@@ -397,13 +406,15 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
   async updateClientExpireDate({ clientId, expireDate }) {
     const client = await this.getClient({ clientId });
 
+    const shouldEnable = shouldEnableOnExpireUpdate(client, expireDate);
+
     if (expireDate) {
       client.expiredAt = new Date(expireDate);
-      client.expiredAt.setHours(23);
-      client.expiredAt.setMinutes(59);
-      client.expiredAt.setSeconds(59);
     } else {
       client.expiredAt = null;
+    }
+    if (shouldEnable) {
+      client.enabled = true;
     }
     client.updatedAt = new Date();
 
@@ -437,34 +448,36 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
   }
 
   async cronJobEveryMinute() {
-    const config = await this.getConfig();
-    let needSaveConfig = false;
-    // Expires Feature
-    if (WG_ENABLE_EXPIRES_TIME === 'true') {
+    try {
+      const config = await this.getConfig();
+      let needSaveConfig = false;
+      // Expires Feature (always on)
       for (const client of Object.values(config.clients)) {
         if (client.enabled !== true) continue;
-        if (client.expiredAt !== null && new Date() > new Date(client.expiredAt)) {
+        if (client.expiredAt !== null && client.expiredAt !== undefined && new Date() > new Date(client.expiredAt)) {
           debug(`Client ${client.id} expired.`);
           needSaveConfig = true;
           client.enabled = false;
           client.updatedAt = new Date();
         }
       }
-    }
-    // One Time Link Feature
-    if (WG_ENABLE_ONE_TIME_LINKS === 'true') {
-      for (const client of Object.values(config.clients)) {
-        if (client.oneTimeLink !== null && new Date() > new Date(client.oneTimeLinkExpiresAt)) {
-          debug(`Client ${client.id} One Time Link expired.`);
-          needSaveConfig = true;
-          client.oneTimeLink = null;
-          client.oneTimeLinkExpiresAt = null;
-          client.updatedAt = new Date();
+      // One Time Link Feature
+      if (WG_ENABLE_ONE_TIME_LINKS === 'true') {
+        for (const client of Object.values(config.clients)) {
+          if (client.oneTimeLink !== null && new Date() > new Date(client.oneTimeLinkExpiresAt)) {
+            debug(`Client ${client.id} One Time Link expired.`);
+            needSaveConfig = true;
+            client.oneTimeLink = null;
+            client.oneTimeLinkExpiresAt = null;
+            client.updatedAt = new Date();
+          }
         }
       }
-    }
-    if (needSaveConfig) {
-      await this.saveConfig();
+      if (needSaveConfig) {
+        await this.saveConfig();
+      }
+    } catch (err) {
+      debug('cronJobEveryMinute failed: %O', err);
     }
   }
 
