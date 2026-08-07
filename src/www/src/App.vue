@@ -36,21 +36,27 @@
         />
       </div>
 
-      <ClientForm
-        v-if="showForm"
-        :client="editingClient"
-        :all-tags="allTags"
-        @save="onSaveClient"
-        @close="closeForm"
-      />
-      <QrModal v-if="qrClient" :client="qrClient" @close="qrClient = null" />
-      <ConfirmDialog
-        v-if="deletingClient"
-        :title="$t('deleteClient')"
-        :message="deletingClient.name"
-        @confirm="onDeleteClient"
-        @cancel="deletingClient = null"
-      />
+      <Transition name="modal">
+        <ClientForm
+          v-if="showForm"
+          :client="editingClient"
+          :all-tags="allTags"
+          @save="onSaveClient"
+          @close="closeForm"
+        />
+      </Transition>
+      <Transition name="modal">
+        <QrModal v-if="qrClient" :client="qrClient" @close="qrClient = null" />
+      </Transition>
+      <Transition name="modal">
+        <ConfirmDialog
+          v-if="deletingClient"
+          :title="$t('deleteClient')"
+          :message="deletingClient.name"
+          @confirm="onDeleteClient"
+          @cancel="deletingClient = null"
+        />
+      </Transition>
     </div>
     <Toasts />
   </div>

@@ -20,14 +20,15 @@
           {{ $t('filterByTags') }}
           <span
             v-if="tags.length"
-            class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-md
+            class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-[3px]
               tag-chip text-[0.65rem] font-medium"
           >{{ tags.length }}</span>
         </button>
-        <div
-          v-if="open"
-          class="absolute right-0 z-30 mt-2 w-56 rounded-[10px] glass-floating border border-white/[0.08] p-2 max-h-60 overflow-y-auto flex flex-col gap-1"
-        >
+        <Transition name="dropdown">
+          <div
+            v-if="open"
+            class="absolute right-0 z-30 mt-2 w-56 glass-floating border border-white/[0.08] p-2 max-h-60 overflow-y-auto flex flex-col gap-1"
+          >
           <label
             v-for="tag in allTags"
             :key="tag"
@@ -41,7 +42,8 @@
             />
             {{ tag }}
           </label>
-        </div>
+          </div>
+        </Transition>
       </div>
 
       <button
@@ -62,7 +64,7 @@
       <span
         v-for="tag in tags"
         :key="tag"
-        class="tag-chip inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md"
+        class="tag-chip inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-[3px]"
       >
         {{ tag }}
         <button

@@ -15,7 +15,7 @@
           <span
             v-for="tag in client.tags"
             :key="tag"
-            class="tag-chip text-[11px] px-2 py-0.5 rounded-md"
+            class="tag-chip text-[11px] px-2 py-0.5 rounded-[3px]"
           >{{ tag }}</span>
         </div>
       </div>
@@ -42,15 +42,15 @@
       <TrafficChart :data="client.transferTxHistory" :chart-type="chartTypeClass" color="rgba(148,163,184,0.5)" />
     </div>
 
-    <div class="flex flex-wrap gap-2 pt-1">
-      <button class="glass-button text-xs" @click="$emit('showQr', client)">{{ $t('showQR') }}</button>
-      <a class="glass-button text-xs" :href="configurationUrl" download>{{ $t('downloadConfig') }}</a>
-      <button v-if="oneTimeLinks" class="glass-button text-xs" @click="$emit('oneTimeLink', client)">
+    <div class="flex flex-wrap gap-2 border-t border-white/[0.06] pt-3 mt-1">
+      <button class="glass-button text-xs px-2.5 py-1.5" @click="$emit('showQr', client)">{{ $t('showQR') }}</button>
+      <a class="glass-button text-xs px-2.5 py-1.5" :href="configurationUrl" download>{{ $t('downloadConfig') }}</a>
+      <button v-if="oneTimeLinks" class="glass-button text-xs px-2.5 py-1.5" @click="$emit('oneTimeLink', client)">
         {{ $t('oneTimeLinkShort') }}
       </button>
-      <button class="glass-button text-xs ml-auto" @click="$emit('edit', client)">{{ $t('editClient') }}</button>
+      <button class="glass-button text-xs px-2.5 py-1.5 ml-auto" @click="$emit('edit', client)">{{ $t('editClient') }}</button>
       <button
-        class="glass-button text-xs !border-red-400/30 text-red-300 hover:!bg-red-500/10"
+        class="glass-button text-xs px-2.5 py-1.5 !border-red-400/30 text-red-300 hover:!bg-red-500/10"
         @click="$emit('delete', client)"
       >{{ $t('deleteClient') }}</button>
     </div>

@@ -1,7 +1,7 @@
 <template>
   <BaseModal @close="$emit('close')">
     <h2 class="text-lg font-semibold text-zinc-100 mb-4 text-center break-all">{{ client.name }}</h2>
-    <img :src="qrUrl" class="w-full max-w-xs mx-auto rounded-lg bg-white p-2" alt="QR code" />
+    <img :src="qrUrl" class="w-full max-w-xs mx-auto bg-white p-2" alt="QR code" />
   </BaseModal>
 </template>
 

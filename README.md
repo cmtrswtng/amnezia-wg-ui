@@ -76,6 +76,18 @@ The Prometheus metrics will now be available on `http://0.0.0.0:51821/metrics`. 
 
 > 💡 Your configuration files will be saved in `~/.amnezia-wg-easy`
 
+## Development
+
+For local development with hot reload, run:
+
+```
+npm run serve:dev
+```
+
+This starts the backend with nodemon (auto-restarts on code changes) and the admin UI
+via the Vite dev server on `http://localhost:5173` (hot reload, API proxied to the backend).
+The backend API itself is available on `$PORT` (default `51821`).
+
 ## Options
 
 These options can be configured by setting environment variables using `-e KEY="VALUE"` in the `docker run` command.

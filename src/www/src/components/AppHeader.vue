@@ -1,5 +1,5 @@
 <template>
-  <header class="sticky top-0 z-30 flex items-center gap-3 -mx-4 px-4 py-3 bg-[#2a2b2d]/85 backdrop-blur-[8px] border-b border-white/[0.06]">
+  <header class="sticky top-0 z-30 flex items-center gap-3 -mx-4 px-4 py-3 bg-[#2a2b2d] border-b border-white/[0.06]">
     <h1 class="text-sm font-semibold text-zinc-50 mr-auto">AmneziaWG Easy</h1>
 
     <select
