@@ -16,6 +16,7 @@ const {
   defineEventHandler,
   fromNodeMiddleware,
   getRouterParam,
+  getQuery,
   toNodeListener,
   readBody,
   setHeader,
@@ -23,6 +24,7 @@ const {
 } = require('h3');
 
 const WireGuard = require('../services/WireGuard');
+const AuditLog = require('../services/AuditLog');
 const { requiresPassword, isPasswordValid, apiAuthMiddleware } = require('./Auth');
 
 const {
@@ -184,6 +186,11 @@ module.exports = class Server {
       }))
       .get('/api/wireguard/client', defineEventHandler(() => {
         return WireGuard.getClients();
+      }))
+      .get('/api/wireguard/audit', defineEventHandler(async (event) => {
+        const query = getQuery(event);
+        const limit = Math.min(parseInt(query.limit, 10) || 200, 1000);
+        return AuditLog.getEntries({ limit });
       }))
       .get('/api/wireguard/client/:clientId/qrcode.svg', defineEventHandler(async (event) => {
         const clientId = getRouterParam(event, 'clientId');

@@ -9,6 +9,9 @@ const CRC32 = require('crc-32');
 
 const Util = require('./Util');
 const ServerError = require('./ServerError');
+const AuditLog = require('../services/AuditLog');
+
+const audit = (entry) => AuditLog.log(entry).catch(() => {});
 const { normalizeTags, isClientExpired, shouldEnableOnExpireUpdate } = require('./clientUtils');
 const {
   validateQuotaInput,
@@ -355,6 +358,10 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
 
     await this.saveConfig();
 
+    audit({
+      actor: 'admin', action: 'client.create', clientId: id, clientName: name,
+    });
+
     return client;
   }
 
@@ -362,8 +369,13 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     const config = await this.getConfig();
 
     if (config.clients[clientId]) {
+      const clientName = config.clients[clientId].name;
       delete config.clients[clientId];
       await this.saveConfig();
+
+      audit({
+        actor: 'admin', action: 'client.delete', clientId, clientName,
+      });
     }
   }
 
@@ -379,6 +391,10 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     client.updatedAt = new Date();
 
     await this.saveConfig();
+
+    audit({
+      actor: 'admin', action: 'client.enable', clientId, clientName: client.name,
+    });
   }
 
   async generateOneTimeLink({ clientId }) {
@@ -388,6 +404,10 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     client.oneTimeLinkExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
     client.updatedAt = new Date();
     await this.saveConfig();
+
+    audit({
+      actor: 'admin', action: 'client.oneTimeLink', clientId, clientName: client.name,
+    });
   }
 
   async eraseOneTimeLink({ clientId }) {
@@ -405,6 +425,10 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     client.updatedAt = new Date();
 
     await this.saveConfig();
+
+    audit({
+      actor: 'admin', action: 'client.disable', clientId, clientName: client.name,
+    });
   }
 
   async updateClientName({ clientId, name }) {
@@ -414,6 +438,10 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     client.updatedAt = new Date();
 
     await this.saveConfig();
+
+    audit({
+      actor: 'admin', action: 'client.rename', clientId, clientName: client.name, details: { name },
+    });
   }
 
   async setClientTags({ clientId, tags }) {
@@ -423,6 +451,14 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     client.updatedAt = new Date();
 
     await this.saveConfig();
+
+    audit({
+      actor: 'admin',
+      action: 'client.tags',
+      clientId,
+      clientName: client.name,
+      details: { tags: client.tags },
+    });
   }
 
   async setClientQuota({ clientId, quotaBytes, quotaCycleDays }) {
@@ -458,6 +494,14 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     client.updatedAt = new Date();
 
     await this.saveConfig();
+
+    audit({
+      actor: 'admin',
+      action: 'client.quota',
+      clientId,
+      clientName: client.name,
+      details: { quotaBytes: client.quotaBytes, quotaCycleDays: client.quotaCycleDays },
+    });
   }
 
   async resetClientQuota({ clientId }) {
@@ -473,6 +517,10 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     client.updatedAt = new Date();
 
     await this.saveConfig();
+
+    audit({
+      actor: 'admin', action: 'client.quotaReset', clientId, clientName: client.name,
+    });
   }
 
   async updateClientAddress({ clientId, address }) {
@@ -486,6 +534,14 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     client.updatedAt = new Date();
 
     await this.saveConfig();
+
+    audit({
+      actor: 'admin',
+      action: 'client.address',
+      clientId,
+      clientName: client.name,
+      details: { address },
+    });
   }
 
   async updateClientExpireDate({ clientId, expireDate }) {
@@ -510,6 +566,14 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     client.updatedAt = new Date();
 
     await this.saveConfig();
+
+    audit({
+      actor: 'admin',
+      action: 'client.expireDate',
+      clientId,
+      clientName: client.name,
+      details: { expireDate },
+    });
   }
 
   async __reloadConfig() {
@@ -523,6 +587,8 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     await this.__saveConfig(_config);
     await this.__reloadConfig();
     debug('Configuration restore process completed.');
+
+    audit({ actor: 'admin', action: 'config.restore' });
   }
 
   async backupConfiguration() {
@@ -550,6 +616,12 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
           needSaveConfig = true;
           client.enabled = false;
           client.updatedAt = new Date();
+          audit({
+            actor: 'system',
+            action: 'system.expired',
+            clientId: client.id,
+            clientName: client.name,
+          });
         }
       }
       // Quota Feature (always on; per-client, unlimited by default)
@@ -568,6 +640,12 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
             const expired = client.expiredAt != null && new Date() > new Date(client.expiredAt);
             if (!expired && client.enabled !== true) {
               client.enabled = true;
+              audit({
+                actor: 'system',
+                action: 'system.quotaRollover',
+                clientId: client.id,
+                clientName: client.name,
+              });
             }
           }
           client.updatedAt = new Date();
@@ -599,6 +677,12 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
             client.enabled = false;
             client.quotaExceeded = true;
             client.updatedAt = new Date();
+            audit({
+              actor: 'system',
+              action: 'system.quotaExceeded',
+              clientId: client.id,
+              clientName: client.name,
+            });
           }
         }
       }
