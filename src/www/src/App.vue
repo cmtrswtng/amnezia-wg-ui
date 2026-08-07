@@ -11,7 +11,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import { api } from './api/client';
@@ -29,13 +29,24 @@ const { refresh, startPolling, stopPolling } = useClients();
 const toasts = useToasts();
 const { locale, availableLocales } = useI18n();
 
+// React to auth state transitions: load data and start polling on login,
+// stop polling on logout or session expiry (api:unauthorized).
+watch(authenticated, async (value) => {
+  if (value === true) {
+    try {
+      await Promise.all([loadSettings(), refresh()]);
+      startPolling();
+    } catch (err) {
+      toasts.error(err.message);
+    }
+  } else if (value === false) {
+    stopPolling();
+  }
+});
+
 async function boot() {
   try {
     await init();
-    if (authenticated.value) {
-      await Promise.all([loadSettings(), refresh()]);
-      startPolling();
-    }
   } catch (err) {
     toasts.error(err.message);
   }
