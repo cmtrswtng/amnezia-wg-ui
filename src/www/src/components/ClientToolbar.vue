@@ -26,7 +26,7 @@
         </button>
         <div
           v-if="open"
-          class="absolute right-0 z-30 mt-2 w-56 rounded-[10px] bg-[#343638] border border-white/[0.08] p-2 max-h-60 overflow-y-auto flex flex-col gap-1"
+          class="absolute right-0 z-30 mt-2 w-56 rounded-[10px] glass-floating border border-white/[0.08] p-2 max-h-60 overflow-y-auto flex flex-col gap-1"
         >
           <label
             v-for="tag in allTags"
