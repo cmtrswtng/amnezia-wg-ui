@@ -84,11 +84,13 @@ export function useClients() {
     enableClient: (id) => mutate(api.enableClient(id)),
     disableClient: (id) => mutate(api.disableClient(id)),
     generateOneTimeLink: (id) => mutate(api.generateOneTimeLink(id)),
-    saveClient: async (id, { name, expiredDate, tags }) => {
+    resetQuota: (id) => mutate(api.resetClientQuota(id)),
+    saveClient: async (id, { name, expiredDate, tags, quotaBytes, quotaCycleDays }) => {
       await mutate(Promise.all([
         api.updateClientName(id, name),
         api.updateClientExpireDate(id, expiredDate || null),
         api.updateClientTags(id, tags ?? []),
+        api.updateClientQuota(id, { quotaBytes, quotaCycleDays }),
       ]));
     },
   };

@@ -33,6 +33,7 @@
           @delete="deletingClient = $event"
           @show-qr="qrClient = $event"
           @one-time-link="onOneTimeLink"
+          @reset-quota="onResetQuota"
         />
       </div>
 
@@ -96,6 +97,7 @@ const {
   enableClient,
   disableClient,
   generateOneTimeLink,
+  resetQuota,
 } = useClients();
 const { allTags } = useTags();
 const toasts = useToasts();
@@ -111,6 +113,7 @@ const qrClient = ref(null);
 const deletingClient = ref(null);
 
 function statusOf(client) {
+  if (client.quotaExceeded) return 'quota';
   if (client.isExpired) return 'expired';
   return client.enabled ? 'active' : 'disabled';
 }
@@ -207,6 +210,10 @@ async function onSaveClient(payload) {
 function onToggle(client) {
   const action = client.enabled ? disableClient : enableClient;
   action(client.id).catch(() => {});
+}
+
+function onResetQuota(client) {
+  resetQuota(client.id).catch(() => {});
 }
 
 async function onDeleteClient() {

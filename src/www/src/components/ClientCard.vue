@@ -9,6 +9,7 @@
             :class="statusDotClass"
           />
           <span class="font-medium text-zinc-100 truncate">{{ client.name }}</span>
+          <span v-if="client.quotaExceeded" class="text-xs text-red-400 shrink-0">{{ $t('statusQuota') }}</span>
         </div>
         <div class="text-xs text-zinc-500 font-mono">{{ client.address }}</div>
         <div v-if="client.tags?.length" class="flex flex-wrap gap-1 mt-1.5">
@@ -37,6 +38,16 @@
       <span v-if="client.latestHandshakeAt">{{ timeAgo(client.latestHandshakeAt, locale) }}</span>
     </div>
 
+    <div v-if="client.quotaBytes != null" class="flex flex-col gap-1">
+      <div class="h-1 bg-white/[0.07] overflow-hidden">
+        <div class="h-full transition-all" :class="quotaBarClass" :style="{ width: `${client.quotaUsedPercent}%` }" />
+      </div>
+      <div class="flex justify-between text-xs" :class="client.quotaExceeded ? 'text-red-400' : 'text-zinc-500'">
+        <span>{{ formatBytes(client.quotaUsedBytes) }} / {{ formatBytes(client.quotaBytes) }}</span>
+        <span v-if="client.quotaCycleEndsAt">{{ $t('quotaUntil') }} {{ formatDate(client.quotaCycleEndsAt) }}</span>
+      </div>
+    </div>
+
     <div v-if="chartTypeClass" class="grid grid-cols-2 gap-2">
       <TrafficChart :data="client.transferRxHistory" :chart-type="chartTypeClass" color="rgba(56,189,248,0.5)" />
       <TrafficChart :data="client.transferTxHistory" :chart-type="chartTypeClass" color="rgba(148,163,184,0.5)" />
@@ -47,6 +58,9 @@
       <a class="glass-button text-xs px-2.5 py-1.5" :href="configurationUrl" download>{{ $t('downloadConfig') }}</a>
       <button v-if="oneTimeLinks" class="glass-button text-xs px-2.5 py-1.5" @click="$emit('oneTimeLink', client)">
         {{ $t('oneTimeLinkShort') }}
+      </button>
+      <button v-if="client.quotaBytes != null" class="glass-button text-xs px-2.5 py-1.5" @click="$emit('resetQuota', client)">
+        {{ $t('quotaReset') }}
       </button>
       <button class="glass-button text-xs px-2.5 py-1.5 ml-auto" @click="$emit('edit', client)">{{ $t('editClient') }}</button>
       <button
@@ -62,7 +76,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import { api } from '../api/client';
-import { formatBytes, formatDateTime, sha256Hex, timeAgo } from '../utils/format';
+import { formatBytes, formatDate, formatDateTime, sha256Hex, timeAgo } from '../utils/format';
 import TrafficChart from './TrafficChart.vue';
 
 const props = defineProps({
@@ -72,7 +86,7 @@ const props = defineProps({
   chartType: { type: Number, default: 0 },
 });
 
-defineEmits(['toggle', 'edit', 'delete', 'showQr', 'oneTimeLink']);
+defineEmits(['toggle', 'edit', 'delete', 'showQr', 'oneTimeLink', 'resetQuota']);
 
 const { locale } = useI18n();
 
@@ -83,8 +97,16 @@ const configurationUrl = computed(() => api.configurationUrl(props.client.id));
 
 const statusDotClass = computed(() => {
   if (props.client.isExpired) return 'bg-red-400';
+  if (props.client.quotaExceeded) return 'bg-red-400';
   if (props.client.enabled) return 'bg-emerald-400';
   return 'bg-zinc-600';
+});
+
+const quotaBarClass = computed(() => {
+  const percent = props.client.quotaUsedPercent ?? 0;
+  if (props.client.quotaExceeded || percent >= 100) return 'bg-red-400';
+  if (percent >= 80) return 'bg-amber-400';
+  return 'bg-sky-400';
 });
 
 const expiryClass = computed(() => {

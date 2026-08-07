@@ -13,6 +13,7 @@
         <option value="active">{{ $t('statusActive') }}</option>
         <option value="disabled">{{ $t('statusDisabled') }}</option>
         <option value="expired">{{ $t('statusExpired') }}</option>
+        <option value="quota">{{ $t('statusQuota') }}</option>
       </select>
 
       <div v-if="allTags.length" ref="tagDropdown" class="relative">

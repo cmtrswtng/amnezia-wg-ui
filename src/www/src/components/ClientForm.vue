@@ -26,6 +26,17 @@
         </div>
       </div>
 
+      <div class="grid grid-cols-2 gap-3">
+        <label class="flex flex-col gap-1 text-xs text-zinc-400">
+          {{ $t('quotaGb') }}
+          <input v-model="quotaGb" type="number" min="0" step="0.1" class="glass-input" :placeholder="$t('quotaUnlimited')" />
+        </label>
+        <label v-if="quotaGb" class="flex flex-col gap-1 text-xs text-zinc-400">
+          {{ $t('quotaCycleDays') }}
+          <input v-model.number="quotaCycleDays" type="number" min="1" max="365" step="1" class="glass-input" />
+        </label>
+      </div>
+
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="glass-button" @click="$emit('close')">{{ $t('cancel') }}</button>
         <button type="submit" class="glass-button-primary" :disabled="!name">{{ $t('save') }}</button>
@@ -51,6 +62,8 @@ const emit = defineEmits(['save', 'close']);
 const name = ref('');
 const expireValue = ref('');
 const tags = ref([]);
+const quotaGb = ref('');
+const quotaCycleDays = ref(30);
 
 watch(
   () => props.client,
@@ -58,6 +71,8 @@ watch(
     name.value = client?.name ?? '';
     expireValue.value = toLocalInputValue(client?.expiredAt);
     tags.value = [...(client?.tags ?? [])];
+    quotaGb.value = client?.quotaBytes != null ? client.quotaBytes / (1024 ** 3) : '';
+    quotaCycleDays.value = client?.quotaCycleDays ?? 30;
   },
   { immediate: true },
 );
@@ -72,6 +87,10 @@ function submit() {
     name: name.value,
     expiredDate: expireValue.value ? new Date(expireValue.value).toISOString() : null,
     tags: tags.value,
+    quotaBytes: quotaGb.value !== '' && Number(quotaGb.value) > 0
+      ? Math.round(Number(quotaGb.value) * (1024 ** 3))
+      : null,
+    quotaCycleDays: quotaCycleDays.value || 30,
   });
 }
 </script>

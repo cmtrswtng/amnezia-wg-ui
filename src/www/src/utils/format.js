@@ -8,6 +8,14 @@ export function formatBytes(value, decimals = 2) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
+export function formatDate(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(value));
+}
+
 export function formatDateTime(value) {
   if (!value) return '';
   return new Intl.DateTimeFormat(undefined, {
