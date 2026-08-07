@@ -189,7 +189,7 @@ module.exports = class Server {
       }))
       .get('/api/wireguard/audit', defineEventHandler(async (event) => {
         const query = getQuery(event);
-        const limit = Math.min(parseInt(query.limit, 10) || 200, 1000);
+        const limit = Math.max(1, Math.min(parseInt(query.limit, 10) || 200, 1000));
         return AuditLog.getEntries({ limit });
       }))
       .get('/api/wireguard/client/:clientId/qrcode.svg', defineEventHandler(async (event) => {
