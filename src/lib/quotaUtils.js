@@ -74,6 +74,7 @@ const quotaCycleEndsAt = (client) => {
 module.exports = {
   MS_PER_DAY,
   DEFAULT_CYCLE_DAYS,
+  MAX_CYCLE_DAYS,
   validateQuotaInput,
   transferDelta,
   isCycleDue,

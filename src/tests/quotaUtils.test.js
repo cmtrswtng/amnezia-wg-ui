@@ -8,6 +8,7 @@ const {
   isCycleDue,
   isQuotaExceeded,
   quotaCycleEndsAt,
+  MAX_CYCLE_DAYS,
 } = require('../lib/quotaUtils');
 
 describe('validateQuotaInput', () => {
@@ -99,5 +100,11 @@ describe('quotaCycleEndsAt', () => {
 
   it('null without quota', () => {
     expect(quotaCycleEndsAt({ quotaBytes: null })).toBeNull();
+  });
+});
+
+describe('module exports', () => {
+  it('exposes MAX_CYCLE_DAYS', () => {
+    expect(MAX_CYCLE_DAYS).toBe(365);
   });
 });
