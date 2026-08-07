@@ -6,6 +6,8 @@
 
       <StatsBar :clients="clients" />
 
+      <DashboardSection :clients="clients" />
+
       <ClientToolbar
         v-model:search="searchQuery"
         v-model:status="statusFilter"
@@ -101,6 +103,7 @@ import ClientCard from './components/ClientCard.vue';
 import ClientForm from './components/ClientForm.vue';
 import ClientToolbar from './components/ClientToolbar.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
+import DashboardSection from './components/DashboardSection.vue';
 import LoginView from './components/LoginView.vue';
 import QrModal from './components/QrModal.vue';
 import StatsBar from './components/StatsBar.vue';
