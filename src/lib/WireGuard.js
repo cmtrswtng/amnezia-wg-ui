@@ -1,6 +1,5 @@
 'use strict';
 
-const fs = require('node:fs/promises');
 const path = require('path');
 const debug = require('debug')('WireGuard');
 const crypto = require('node:crypto');
@@ -10,6 +9,13 @@ const CRC32 = require('crc-32');
 const Util = require('./Util');
 const ServerError = require('./ServerError');
 const AuditLog = require('../services/AuditLog');
+const {
+  PROTOCOL_VERSION,
+  createAwg2Parameters,
+  validateAwg2Parameters,
+  migrateConfigToAwg2,
+} = require('./awgConfig');
+const configFiles = require('./configFiles');
 
 const audit = (entry) => AuditLog.log(entry).catch(() => {});
 const { normalizeTags, isClientExpired, shouldEnableOnExpireUpdate } = require('./clientUtils');
@@ -36,61 +42,66 @@ const {
   WG_PRE_DOWN,
   WG_POST_DOWN,
   WG_ENABLE_ONE_TIME_LINKS,
-  JC,
-  JMIN,
-  JMAX,
-  S1,
-  S2,
-  H1,
-  H2,
-  H3,
-  H4,
 } = require('../config');
 
 module.exports = class WireGuard {
 
+  constructor({
+    wgPath = WG_PATH,
+    env = process.env,
+    exec = (command, options) => Util.exec(command, options),
+    randomInt = crypto.randomInt,
+  } = {}) {
+    this.wgPath = wgPath;
+    this.env = env;
+    this.exec = exec;
+    this.randomInt = randomInt;
+  }
+
   async __buildConfig() {
-    this.__configPromise = Promise.resolve().then(async () => {
-      if (!WG_HOST) {
+    const migration = await Promise.resolve().then(async () => {
+      if (!(this.env.WG_HOST ?? WG_HOST)) {
         throw new Error('WG_HOST Environment Variable Not Set!');
       }
 
       debug('Loading configuration...');
-      let config;
-      try {
-        config = await fs.readFile(path.join(WG_PATH, 'wg0.json'), 'utf8');
-        config = JSON.parse(config);
-        debug('Configuration loaded.');
-      } catch (err) {
-        const privateKey = await Util.exec('wg genkey');
-        const publicKey = await Util.exec(`echo ${privateKey} | wg pubkey`, {
+      const loaded = await configFiles.readJsonConfig(path.join(this.wgPath, 'wg0.json'));
+      if (!loaded.exists) {
+        const privateKey = await this.exec('wg genkey');
+        const publicKey = await this.exec(`echo ${privateKey} | wg pubkey`, {
           log: 'echo ***hidden*** | wg pubkey',
         });
-        const address = WG_DEFAULT_ADDRESS.replace('x', '1');
-
-        config = {
-          server: {
-            privateKey,
-            publicKey,
-            address,
-            jc: JC,
-            jmin: JMIN,
-            jmax: JMAX,
-            s1: S1,
-            s2: S2,
-            h1: H1,
-            h2: H2,
-            h3: H3,
-            h4: H4,
-          },
-          clients: {},
-        };
         debug('Configuration generated.');
+        return {
+          config: {
+            protocolVersion: PROTOCOL_VERSION,
+            server: {
+              privateKey,
+              publicKey,
+              address: WG_DEFAULT_ADDRESS.replace('x', '1'),
+              ...createAwg2Parameters({ env: this.env, randomInt: this.randomInt }),
+            },
+            clients: {},
+          },
+          migrated: false,
+        };
       }
 
-      return config;
+      const result = migrateConfigToAwg2(loaded.config, {
+        env: this.env,
+        randomInt: this.randomInt,
+      });
+      if (result.migrated) {
+        await configFiles.createBackupOnce(
+          path.join(this.wgPath, 'wg0.awg1.backup.json'),
+          loaded.raw,
+        );
+      }
+      debug('Configuration loaded.');
+      return result;
     });
 
+    this.__configPromise = Promise.resolve(migration.config);
     return this.__configPromise;
   }
 
@@ -99,18 +110,18 @@ module.exports = class WireGuard {
       const config = await this.__buildConfig();
 
       await this.__saveConfig(config);
-      await Util.exec('wg-quick down wg0').catch(() => {});
-      await Util.exec('wg-quick up wg0').catch((err) => {
+      await this.exec('wg-quick down wg0').catch(() => {});
+      await this.exec('wg-quick up wg0').catch((err) => {
         if (err && err.message && err.message.includes('Cannot find device "wg0"')) {
           throw new Error('WireGuard exited with the error: Cannot find device "wg0"\nThis usually means that your host\'s kernel does not support WireGuard!');
         }
 
         throw err;
       });
-      // await Util.exec(`iptables -t nat -A POSTROUTING -s ${WG_DEFAULT_ADDRESS.replace('x', '0')}/24 -o ' + WG_DEVICE + ' -j MASQUERADE`);
-      // await Util.exec('iptables -A INPUT -p udp -m udp --dport 51820 -j ACCEPT');
-      // await Util.exec('iptables -A FORWARD -i wg0 -j ACCEPT');
-      // await Util.exec('iptables -A FORWARD -o wg0 -j ACCEPT');
+      // await this.exec(`iptables -t nat -A POSTROUTING -s ${WG_DEFAULT_ADDRESS.replace('x', '0')}/24 -o ' + WG_DEVICE + ' -j MASQUERADE`);
+      // await this.exec('iptables -A INPUT -p udp -m udp --dport 51820 -j ACCEPT');
+      // await this.exec('iptables -A FORWARD -i wg0 -j ACCEPT');
+      // await this.exec('iptables -A FORWARD -o wg0 -j ACCEPT');
       await this.__syncConfig();
     }
 
@@ -124,6 +135,7 @@ module.exports = class WireGuard {
   }
 
   async __saveConfig(config) {
+    validateAwg2Parameters(config.server);
     let result = `
 # Note: Do not edit this file directly.
 # Your changes will be overwritten!
@@ -161,18 +173,16 @@ ${client.preSharedKey ? `PresharedKey = ${client.preSharedKey}\n` : ''
     }
 
     debug('Config saving...');
-    await fs.writeFile(path.join(WG_PATH, 'wg0.json'), JSON.stringify(config, false, 2), {
-      mode: 0o660,
-    });
-    await fs.writeFile(path.join(WG_PATH, 'wg0.conf'), result, {
-      mode: 0o600,
-    });
+    await configFiles.writeFileAtomic(
+      path.join(this.wgPath, 'wg0.json'), JSON.stringify(config, null, 2), 0o600,
+    );
+    await configFiles.writeFileAtomic(path.join(this.wgPath, 'wg0.conf'), result, 0o600);
     debug('Config saved.');
   }
 
   async __syncConfig() {
     debug('Config syncing...');
-    await Util.exec('wg syncconf wg0 <(wg-quick strip wg0)');
+    await this.exec('wg syncconf wg0 <(wg-quick strip wg0)');
     debug('Config synced.');
   }
 
@@ -215,7 +225,7 @@ ${client.preSharedKey ? `PresharedKey = ${client.preSharedKey}\n` : ''
     }));
 
     // Loop WireGuard status
-    const dump = await Util.exec('wg show wg0 dump', {
+    const dump = await this.exec('wg show wg0 dump', {
       log: false,
     });
     dump
@@ -304,11 +314,11 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
 
     const config = await this.getConfig();
 
-    const privateKey = await Util.exec('wg genkey');
-    const publicKey = await Util.exec(`echo ${privateKey} | wg pubkey`, {
+    const privateKey = await this.exec('wg genkey');
+    const publicKey = await this.exec(`echo ${privateKey} | wg pubkey`, {
       log: 'echo ***hidden*** | wg pubkey',
     });
-    const preSharedKey = await Util.exec('wg genpsk');
+    const preSharedKey = await this.exec('wg genpsk');
 
     const quota = validateQuotaInput({ quotaBytes, quotaCycleDays });
 
@@ -601,7 +611,7 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
 
   // Shutdown wireguard
   async Shutdown() {
-    await Util.exec('wg-quick down wg0').catch(() => {});
+    await this.exec('wg-quick down wg0').catch(() => {});
   }
 
   async cronJobEveryMinute() {
@@ -651,7 +661,7 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
           client.updatedAt = new Date();
         }
         // 2. Accrue transfer deltas
-        const dump = await Util.exec('wg show wg0 dump', { log: false });
+        const dump = await this.exec('wg show wg0 dump', { log: false });
         const counters = new Map();
         dump.trim().split('\n').slice(1).forEach((line) => {
           const [publicKey,,,,, transferRx, transferTx] = line.split('\t');
