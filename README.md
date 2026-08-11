@@ -133,6 +133,22 @@ The backend API itself is available on `$PORT` (default `51821`).
 
 These options can be configured by setting environment variables using `-e KEY="VALUE"` in the `docker run` command.
 
+### AmneziaWG 2 configuration
+
+The server uses the pinned `amneziavpn/amneziawg-go:2.0.0` backend and publishes a
+`linux/amd64` image. The AWG parameters are interface-wide and are persisted in
+`wg0.json` with top-level `protocolVersion: 2`. On a fresh install or one-time
+legacy migration, the values below are generated (or taken from the environment)
+and validated before they are persisted. Once `protocolVersion: 2` exists,
+changing the environment does not silently rewrite the active framing values;
+edit the persisted configuration only as part of a planned migration.
+
+The generated defaults use independently randomized `S1`, `S2`, and `S3`
+values, plus non-zero `S3` and `S4`; `I1` through `I5` are empty unless
+explicitly configured. All newly generated client profiles must be
+downloaded after migration because old profiles contain the previous
+interface-wide framing parameters and cannot be expected to connect.
+
 | Env                           | Default           | Example                        | Description                                                                                                                                                                                                        |
 |-------------------------------|-------------------|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `PORT`                        | `51821`           | `6789`                         | TCP port for Web UI.                                                                                                                                                                                               |
@@ -162,17 +178,112 @@ These options can be configured by setting environment variables using `-e KEY="
 | `UI_ENABLE_SORT_CLIENTS`      | `false`           | `true`                         | Enable UI sort clients by name                                                                                                                                                                                     |
 | `ENABLE_PROMETHEUS_METRICS`   | `false`           | `true`                         | Enable Prometheus metrics `http://0.0.0.0:51821/metrics` and `http://0.0.0.0:51821/metrics/json`                                                                                                                   |
 | `PROMETHEUS_METRICS_PASSWORD` | -                 | `$2y$05$Ci...`                 | If set, Basic Auth is required when requesting metrics.                                                                                                                                                            |
-| `JC`                          | `random`          | `5`                            | Junk packet count — number of packets with random data that are sent before the start of the session.                                                                                                              |
-| `JMIN`                        | `50`              | `25`                           | Junk packet minimum size — minimum packet size for Junk packet. That is, all randomly generated packets will have a size no smaller than Jmin.                                                                     |
-| `JMAX`                        | `1000`            | `250`                          | Junk packet maximum size — maximum size for Junk packets.                                                                                                                                                          |
-| `S1`                          | `random`          | `75`                           | Init packet junk size — the size of random data that will be added to the init packet, the size of which is initially fixed.                                                                                       |
-| `S2`                          | `random`          | `75`                           | Response packet junk size — the size of random data that will be added to the response packet, the size of which is initially fixed.                                                                               |
-| `H1`                          | `random`          | `1234567891`                   | Init packet magic header — the header of the first byte of the handshake. Must be < uint_max.                                                                                                                      |
-| `H2`                          | `random`          | `1234567892`                   | Response packet magic header — header of the first byte of the handshake response. Must be < uint_max.                                                                                                             |
-| `H3`                          | `random`          | `1234567893`                   | Underload packet magic header — UnderLoad packet header. Must be < uint_max.                                                                                                                                       |
-| `H4`                          | `random`          | `1234567894`                   | Transport packet magic header — header of the packet of the data packet. Must be < uint_max.                                                                                                                       |
+| `JC`                          | `random 4..8`     | `5`                            | Junk packet count. Validation: integer `0..128`.                                                                                                                                                                   |
+| `JMIN`                        | `64`              | `25`                           | Junk packet minimum size. Validation: integer `0..1279`, and no greater than `JMAX`.                                                                                                                               |
+| `JMAX`                        | `512`             | `250`                          | Junk packet maximum size. Validation: integer `0..1279`, and no less than `JMIN`.                                                                                                                                  |
+| `S1`                          | `random 15..64`   | `32`                           | Init packet padding size. Validation: integer `0..64`.                                                                                                                                                             |
+| `S2`                          | `random 15..64`   | `40`                           | Response packet padding size. Validation: integer `0..64`.                                                                                                                                                         |
+| `S3`                          | `random 15..64`   | `24`                           | Additional AWG 2 padding size. Validation: integer `0..64`; the generated default is non-zero.                                                                                                                    |
+| `S4`                          | `random 8..32`    | `16`                           | Additional AWG 2 padding size. Validation: integer `0..32`; the generated default is non-zero.                                                                                                                    |
+| `H1`                          | `random unique 5..2147483647` | `1000000001`                   | Init packet magic header. Validation: unique integer `5..2147483647`.                                                                                                                                              |
+| `H2`                          | `random unique 5..2147483647` | `1000000002`                   | Response packet magic header. Validation: unique integer `5..2147483647`.                                                                                                                                         |
+| `H3`                          | `random unique 5..2147483647` | `1000000003`                   | Underload packet magic header. Validation: unique integer `5..2147483647`.                                                                                                                                          |
+| `H4`                          | `random unique 5..2147483647` | `1000000004`                   | Transport packet magic header. Validation: unique integer `5..2147483647`.                                                                                                                                          |
+| `I1`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
+| `I2`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
+| `I3`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
+| `I4`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
+| `I5`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
 
 > If you change `WG_PORT`, make sure to also change the exposed port.
+
+### Breaking migration: refresh every client profile
+
+This release changes the interface-wide AWG framing parameters. Existing
+downloaded profiles are not backward-compatible with the migrated server, so
+plan a short client refresh window:
+
+1. Back up the Docker volume that contains `/etc/wireguard` before upgrading.
+2. Deploy the image containing the pinned AWG 2.0.0 backend.
+3. Confirm that the one-time migration created
+   `/etc/wireguard/wg0.awg1.backup.json`:
+
+   ```bash
+   docker exec amnezia-wg-ui test -f /etc/wireguard/wg0.awg1.backup.json
+   ```
+
+4. Download every client `.conf` again from the admin panel.
+5. Import each new file into a current AWG 2-capable client and connect.
+
+Do not reuse a previously downloaded profile after migration. Server and client
+keys are retained, but the old interface parameters differ from the new
+persisted v2 values.
+
+### Diagnostics
+
+Run these commands on the host while attempting a connection:
+
+```bash
+sudo tcpdump -ni any 'udp port 51820'
+docker exec amnezia-wg-easy wg show wg0
+docker exec amnezia-wg-easy wg show wg0 latest-handshakes
+```
+
+Interpret the results as follows:
+
+- **No UDP:** packets are not reaching the host; check the endpoint address,
+  exposed UDP port, firewall, NAT, and cloud security rules.
+- **UDP without a handshake:** the endpoint is reachable but the client is not
+  completing WireGuard negotiation; use a freshly downloaded profile and an
+  AWG 2-capable client, then check keys and the persisted `S3`/`S4` values.
+- **Handshake without bidirectional traffic:** negotiation succeeded but data
+  is not traversing the tunnel; check forwarding/NAT, `AllowedIPs`, routes,
+  counters, and DNS configuration.
+
+### Rollback
+
+Keep `wg0.awg1.backup.json` until all five platform checks below pass. To roll
+back, stop the AWG 2 container, restore the previous application image, copy
+the legacy backup over `wg0.json`, and start the previous container again. For a
+bind-mounted data directory, the file replacement is:
+
+```bash
+export PREVIOUS_IMAGE=ghcr.io/cmtrswtng/amnezia-wg-ui:<previous-release>
+docker stop amnezia-wg-ui
+# Restore the image used before this upgrade:
+docker rm amnezia-wg-ui
+docker pull "$PREVIOUS_IMAGE"
+# Replace the persisted JSON before recreating the container:
+cp /path/to/wireguard/wg0.awg1.backup.json /path/to/wireguard/wg0.json
+# Re-run the original docker run command with "$PREVIOUS_IMAGE" as its image.
+```
+
+Start the recreated container with the previous image, the same volume, and the
+same port/capability settings. For Compose, set the service image to
+`$PREVIOUS_IMAGE` before running `docker compose up -d`.
+
+For a named Docker volume, perform the same copy from a temporary helper
+container mounted at `/etc/wireguard`, then start the previous image. Do not
+overwrite or delete the backup until rollback is no longer needed.
+
+### Required platform acceptance matrix
+
+This is a release gate, not a record of completed manual validation. On each
+platform use the latest available official AWG 2-capable client. AmneziaVPN
+must be at least `4.8.12.9`; native AmneziaWG clients must explicitly support
+non-zero `S3` and `S4`.
+
+| Platform | Required checks |
+|----------|-----------------|
+| Windows | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
+| Android | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
+| Linux | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
+| macOS | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
+| iOS | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
+
+Connection UI state alone is not acceptance evidence; all five platforms must
+show a handshake and bidirectional traffic before the migration is considered
+complete.
 
 ## Updating
 
