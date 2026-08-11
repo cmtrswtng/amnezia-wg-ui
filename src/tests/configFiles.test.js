@@ -55,9 +55,15 @@ describe('configuration file operations', () => {
     const filePath = path.join(tempDir, 'wg0.json');
     await fs.writeFile(filePath, '{malformed', 'utf8');
 
-    await expect(readJsonConfig(filePath)).rejects.toThrow(
-      `Cannot parse WireGuard configuration ${filePath}:`,
-    );
+    let parseError;
+    try {
+      await readJsonConfig(filePath);
+    } catch (err) {
+      parseError = err;
+    }
+    expect(parseError).toBeInstanceOf(Error);
+    expect(parseError.name).toBe('WireGuardConfigParseError');
+    expect(parseError.message).toContain(`Cannot parse WireGuard configuration ${filePath}:`);
   });
 
   it('propagates non-ENOENT read errors', async () => {

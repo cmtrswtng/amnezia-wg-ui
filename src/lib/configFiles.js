@@ -15,7 +15,11 @@ const readJsonConfig = async (filePath, fsApi = fs) => {
   try {
     return { exists: true, raw, config: JSON.parse(raw) };
   } catch (err) {
-    throw new Error(`Cannot parse WireGuard configuration ${filePath}: ${err.message}`);
+    const parseError = new Error(
+      `Cannot parse WireGuard configuration ${filePath}: ${err.message}`,
+    );
+    parseError.name = 'WireGuardConfigParseError';
+    throw parseError;
   }
 };
 
