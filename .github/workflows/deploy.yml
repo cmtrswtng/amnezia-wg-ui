@@ -18,11 +18,57 @@ jobs:
       with:
         ref: master
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        cache: npm
+        cache-dependency-path: src/package-lock.json
+
+    - run: npm ci --prefix src
+    - run: npm --prefix src test
+    - run: npm --prefix src run lint
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+
+    - name: Build AMD64 image for AWG smoke testing
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: linux/amd64
+        load: true
+        push: false
+        tags: amnezia-wg-ui:awg2-smoke
+
+    - name: Verify AWG tooling
+      run: docker run --rm --entrypoint sh amnezia-wg-ui:awg2-smoke -c "command -v amneziawg-go && command -v wg && command -v wg-quick"
+
+    - name: Start AWG interface smoke container
+      run: |
+        AWG2_SMOKE_DIR="$(mktemp -d)"
+        echo "AWG2_SMOKE_DIR=$AWG2_SMOKE_DIR" >> "$GITHUB_ENV"
+        docker run -d --name awg2-smoke \
+          --cap-add NET_ADMIN \
+          --device /dev/net/tun \
+          -e WG_HOST=127.0.0.1 \
+          -e WG_ALLOWED_IPS=0.0.0.0/0 \
+          -v "$AWG2_SMOKE_DIR:/etc/wireguard" \
+          amnezia-wg-ui:awg2-smoke
+
+    - name: Verify AWG interface
+      run: |
+        timeout 30s bash -c '
+          until timeout 5s docker exec awg2-smoke wg show wg0; do
+            sleep 1
+          done
+        '
+
+    - name: Collect AWG smoke logs and cleanup
+      if: always()
+      run: |
+        docker logs awg2-smoke || true
+        docker rm -f awg2-smoke || true
+        rm -rf "$AWG2_SMOKE_DIR"
 
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v3
@@ -37,6 +83,7 @@ jobs:
     - name: Build & Publish Docker Image
       uses: docker/build-push-action@v6
       with:
+        context: .
         push: true
-        platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8
+        platforms: linux/amd64
         tags: ghcr.io/${{ github.repository }}:latest, ghcr.io/${{ github.repository }}:${{ env.RELEASE }}

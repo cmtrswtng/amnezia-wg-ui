@@ -17,8 +17,8 @@ RUN npm ci && npm run build
 
 # Copy build result to a new image.
 # This saves a lot of disk space.
-FROM amneziavpn/amnezia-wg:latest
-HEALTHCHECK CMD /usr/bin/timeout 5s /bin/sh -c "/usr/bin/wg show | /bin/grep -q interface || exit 1" --interval=1m --timeout=5s --retries=3
+FROM amneziavpn/amneziawg-go:2.0.0
+HEALTHCHECK --interval=1m --timeout=5s --retries=3 CMD /usr/bin/timeout 5s /bin/sh -c "/usr/bin/wg show wg0 >/dev/null 2>&1 || exit 1"
 COPY --from=build_node_modules /app /app
 COPY --from=build_ui /ui/dist /app/www/dist
 
@@ -40,11 +40,16 @@ RUN apk add --no-cache \
     dpkg \
     dumb-init \
     iptables \
+    iptables-legacy \
     nodejs \
     npm
 
 # Use iptables-legacy
 RUN update-alternatives --install /sbin/iptables iptables /sbin/iptables-legacy 10 --slave /sbin/iptables-restore iptables-restore /sbin/iptables-legacy-restore --slave /sbin/iptables-save iptables-save /sbin/iptables-legacy-save
+
+# AWG 2 wg-quick resolves interface names from this path; keep it aligned with
+# the application's persisted configuration directory.
+RUN mkdir -p /etc/amnezia && ln -s /etc/wireguard /etc/amnezia/amneziawg
 
 # Set Environment
 ENV DEBUG=Server,WireGuard
