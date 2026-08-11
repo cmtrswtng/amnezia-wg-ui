@@ -8,6 +8,7 @@ const path = require('node:path');
 
 const WireGuard = require('../lib/WireGuard');
 const fileHelpers = require('../lib/configFiles');
+const { renderAwg2InterfaceLines } = require('../lib/awgConfig');
 
 const sequentialRandom = () => {
   const offsets = new Map();
@@ -47,6 +48,28 @@ const validConfig = () => ({
     i5: '',
   },
   clients: {},
+});
+
+const profileConfig = (overrides = {}) => ({
+  ...validConfig(),
+  server: {
+    ...validConfig().server,
+    privateKey: 'server-private-key',
+    publicKey: 'server-public-key',
+    ...overrides.server,
+  },
+  clients: {
+    alice: {
+      name: 'Alice',
+      enabled: true,
+      address: '10.8.0.2',
+      privateKey: 'client-private-key',
+      publicKey: 'client-public-key',
+      preSharedKey: 'client-preshared-key',
+      ...overrides.clients?.alice,
+    },
+    ...overrides.clients,
+  },
 });
 
 describe('WireGuard AWG 2 startup migration', () => {
@@ -252,5 +275,51 @@ describe('WireGuard AWG 2 startup migration', () => {
     expect(writeFileAtomic).toHaveBeenNthCalledWith(
       2, path.join(tempDir, 'wg0.conf'), expect.any(String), 0o600,
     );
+  });
+
+  it('renders matching complete AWG 2 framing in server and client profiles', async () => {
+    const config = profileConfig();
+    const wg = new WireGuard({
+      wgPath: tempDir, env: { WG_HOST: 'vpn.example.test' }, exec: createExec(),
+    });
+    wg.getConfig = async () => config;
+
+    await wg.__saveConfig(config);
+    const serverProfile = await fs.readFile(path.join(tempDir, 'wg0.conf'), 'utf8');
+    const clientProfile = await wg.getClientConfiguration({ clientId: 'alice' });
+    const framing = renderAwg2InterfaceLines(config.server);
+
+    expect(serverProfile).toContain(framing);
+    expect(clientProfile).toContain(framing);
+    expect(serverProfile).not.toContain('I2 =');
+    expect(clientProfile).not.toContain('I2 =');
+    expect(serverProfile).toContain('PrivateKey = server-private-key');
+    expect(serverProfile).not.toContain('client-private-key');
+    expect(clientProfile).toContain('PrivateKey = client-private-key');
+    expect(clientProfile).not.toContain('server-private-key');
+
+    config.server.i2 = '<b 0x02>';
+    await wg.__saveConfig(config);
+    const serverWithI2 = await fs.readFile(path.join(tempDir, 'wg0.conf'), 'utf8');
+    const clientWithI2 = await wg.getClientConfiguration({ clientId: 'alice' });
+    const framingWithI2 = renderAwg2InterfaceLines(config.server);
+
+    expect(serverWithI2).toContain(framingWithI2);
+    expect(clientWithI2).toContain(framingWithI2);
+    expect(serverWithI2).toContain('I2 = <b 0x02>');
+    expect(clientWithI2).toContain('I2 = <b 0x02>');
+  });
+
+  it('returns a stable client profile for repeated downloads', async () => {
+    const config = profileConfig({ server: { i2: '<b 0x02>' } });
+    const wg = new WireGuard({
+      wgPath: tempDir, env: { WG_HOST: 'vpn.example.test' }, exec: createExec(),
+    });
+    wg.getConfig = async () => config;
+
+    const first = await wg.getClientConfiguration({ clientId: 'alice' });
+    const second = await wg.getClientConfiguration({ clientId: 'alice' });
+
+    expect(second).toBe(first);
   });
 });
