@@ -112,6 +112,42 @@ describe('configuration file operations', () => {
     );
   });
 
+  it('rejects an existing backup symlink without reading through it', async ({ skip }) => {
+    const activePath = path.join(tempDir, 'wg0.json');
+    const backupPath = path.join(tempDir, 'wg0.awg1.backup.json');
+    const raw = '{"legacy":true}';
+    await fs.writeFile(activePath, raw, 'utf8');
+    try {
+      await fs.symlink(activePath, backupPath, 'file');
+    } catch (err) {
+      if (['EPERM', 'EACCES', 'ENOSYS'].includes(err.code)) skip(`symlinks unavailable: ${err.code}`);
+      throw err;
+    }
+
+    await expect(createBackupOnce(backupPath, raw)).rejects.toThrow(
+      `Existing legacy WireGuard backup ${backupPath} is not a readable regular file`,
+    );
+    await expect(fs.readFile(activePath, 'utf8')).resolves.toBe(raw);
+    await expect(fs.readlink(backupPath)).resolves.toBe(activePath);
+  });
+
+  it('checks link metadata before accepting an existing backup', async () => {
+    const filePath = path.join(tempDir, 'wg0.awg1.backup.json');
+    const raw = '{"legacy":true}';
+    const fsApi = {
+      writeFile: async () => {
+        throw Object.assign(new Error('exists'), { code: 'EEXIST' });
+      },
+      lstat: async () => ({ isSymbolicLink: () => true, isFile: () => false }),
+      stat: async () => ({ isFile: () => true }),
+      readFile: async () => raw,
+    };
+
+    await expect(createBackupOnce(filePath, raw, fsApi)).rejects.toThrow(
+      `Existing legacy WireGuard backup ${filePath} is not a readable regular file`,
+    );
+  });
+
   it('creates backups with mode 0600', async () => {
     const filePath = path.join(tempDir, 'wg0.json.bak');
 

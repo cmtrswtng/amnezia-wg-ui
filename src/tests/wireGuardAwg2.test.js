@@ -5,6 +5,7 @@
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const debug = require('debug');
 
 const WireGuard = require('../lib/WireGuard');
 const fileHelpers = require('../lib/configFiles');
@@ -80,6 +81,7 @@ describe('WireGuard AWG 2 startup migration', () => {
   });
 
   afterEach(async () => {
+    debug.disable();
     await fs.rm(tempDir, { recursive: true, force: true });
     vi.restoreAllMocks();
   });
@@ -312,6 +314,34 @@ describe('WireGuard AWG 2 startup migration', () => {
     await expect(fs.readFile(activePath, 'utf8')).resolves.toBe(raw);
   });
 
+  it('aborts migration when the legacy backup path is a symlink to active state', async ({ skip }) => {
+    const legacy = {
+      server: { privateKey: 'private', publicKey: 'public', address: '10.8.0.1' },
+      clients: {},
+    };
+    const activePath = path.join(tempDir, 'wg0.json');
+    const backupPath = path.join(tempDir, 'wg0.awg1.backup.json');
+    const raw = JSON.stringify(legacy);
+    await fs.writeFile(activePath, raw, 'utf8');
+    try {
+      await fs.symlink(activePath, backupPath, 'file');
+    } catch (err) {
+      if (['EPERM', 'EACCES', 'ENOSYS'].includes(err.code)) skip(`symlinks unavailable: ${err.code}`);
+      throw err;
+    }
+    const write = vi.spyOn(fileHelpers, 'writeFileAtomic');
+    const exec = createExec();
+    const wg = new WireGuard({
+      wgPath: tempDir, env: { WG_HOST: 'vpn.example.test' }, exec, randomInt: sequentialRandom(),
+    });
+
+    await expect(wg.getConfig()).rejects.toThrow('is not a readable regular file');
+    expect(write).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
+    await expect(fs.readFile(activePath, 'utf8')).resolves.toBe(raw);
+    await expect(fs.readlink(backupPath)).resolves.toBe(activePath);
+  });
+
   it('rejects unsupported versions before any interface command', async () => {
     await fs.writeFile(path.join(tempDir, 'wg0.json'), JSON.stringify({ protocolVersion: 3 }), 'utf8');
     const exec = createExec();
@@ -363,7 +393,8 @@ describe('WireGuard AWG 2 startup migration', () => {
       wgPath: tempDir, env: { WG_HOST: 'vpn.example.test' }, exec: createExec(),
     });
     wg.getConfig = async () => config;
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    debug.enable('WireGuard');
 
     await wg.__saveConfig(config);
     const serverProfile = await fs.readFile(path.join(tempDir, 'wg0.conf'), 'utf8');
@@ -378,8 +409,10 @@ describe('WireGuard AWG 2 startup migration', () => {
     expect(serverProfile).not.toContain('client-private-key');
     expect(clientProfile).toContain('PrivateKey = client-private-key');
     expect(clientProfile).not.toContain('server-private-key');
-    expect(log.mock.calls.flat().join(' ')).not.toContain('server-private-key');
-    expect(log.mock.calls.flat().join(' ')).not.toContain('client-private-key');
+    const logged = stderr.mock.calls.flat().join(' ');
+    expect(logged).toContain('WireGuard');
+    expect(logged).not.toContain('server-private-key');
+    expect(logged).not.toContain('client-private-key');
 
     config.server.i2 = '<b 0x02>';
     await wg.__saveConfig(config);

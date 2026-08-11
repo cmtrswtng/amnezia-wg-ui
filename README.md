@@ -226,9 +226,11 @@ persisted v2 values.
 Run these commands on the host while attempting a connection:
 
 ```bash
+# Installer deployment: amnezia-wg-ui; repository Compose: amnezia-wg-easy.
+CONTAINER=amnezia-wg-ui
 sudo tcpdump -ni any 'udp port 51820'
-docker exec amnezia-wg-easy wg show wg0
-docker exec amnezia-wg-easy wg show wg0 latest-handshakes
+docker exec "$CONTAINER" wg show wg0
+docker exec "$CONTAINER" wg show wg0 latest-handshakes
 ```
 
 Interpret the results as follows:

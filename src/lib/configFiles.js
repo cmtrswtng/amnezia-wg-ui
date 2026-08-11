@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs/promises');
+const { constants: fsConstants } = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
@@ -30,9 +31,24 @@ const createBackupOnce = async (filePath, raw, fsApi = fs) => {
   } catch (err) {
     if (err.code === 'EEXIST') {
       try {
-        const stats = await fsApi.stat(filePath);
-        if (!stats.isFile()) throw new Error('not a regular file');
-        const existing = await fsApi.readFile(filePath, 'utf8');
+        const linkStats = await fsApi.lstat(filePath);
+        if (linkStats.isSymbolicLink() || !linkStats.isFile()) {
+          throw new Error('not a regular file');
+        }
+        let existing;
+        if (typeof fsApi.open === 'function') {
+          const noFollow = fsConstants.O_NOFOLLOW ?? 0;
+          const handle = await fsApi.open(filePath, fsConstants.O_RDONLY | noFollow);
+          try {
+            const openedStats = await handle.stat();
+            if (!openedStats.isFile()) throw new Error('not a regular file');
+            existing = await handle.readFile('utf8');
+          } finally {
+            await handle.close();
+          }
+        } else {
+          existing = await fsApi.readFile(filePath, 'utf8');
+        }
         if (existing !== raw) {
           throw new Error(
             `Existing legacy WireGuard backup ${filePath} does not match the configuration being migrated; preserve both files and restore the intended AWG 1 state before retrying`,
