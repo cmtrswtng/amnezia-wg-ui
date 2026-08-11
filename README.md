@@ -242,39 +242,78 @@ Interpret the results as follows:
 
 ### Rollback
 
-Keep `wg0.awg1.backup.json` until all five platform checks below pass. To roll
-back, stop the AWG 2 container, restore the previous application image, copy
-the legacy backup over `wg0.json`, and start the previous container again.
+Keep `wg0.awg1.backup.json` until all five platform checks below pass. The
+image and JSON backup are captured at different lifecycle points; do not try to
+discover the previous image during rollback, after the current container has
+already migrated to AWG 2.
 
-For the installer deployment under `/opt/amnezia-wg-ui`, use this named-volume
-procedure. Run it before an update while the current container still exists;
-the inspect steps deliberately resolve the actual Compose-created volume name
-instead of assuming that it is `awg_data` or has a particular project prefix.
+#### A. Before upgrade: save the AWG 1 image
+
+Run this while the current AWG 1 container still exists, before pulling or
+recreating anything. It records a stable local tag in the installer directory,
+so later shells do not depend on an exported variable:
 
 ```bash
 set -eu
 cd /opt/amnezia-wg-ui
 CONTAINER=amnezia-wg-ui
-
-# Capture and tag the exact image used by the running container before updating.
+ROLLBACK_IMAGE='local/amnezia-wg-ui:awg1-rollback'
 PREVIOUS_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$CONTAINER")"
 test -n "$PREVIOUS_IMAGE_ID"
-ROLLBACK_IMAGE="local/amnezia-wg-ui:rollback-$(date -u +%Y%m%dT%H%M%SZ)"
 docker image tag "$PREVIOUS_IMAGE_ID" "$ROLLBACK_IMAGE"
+printf '%s\n' "$ROLLBACK_IMAGE" > .awg1-rollback-image
+docker image inspect "$ROLLBACK_IMAGE" >/dev/null
+```
 
-# Resolve and validate the exact named volume mounted at /etc/wireguard.
+This phase intentionally does not look for `wg0.awg1.backup.json`; migration has
+not happened yet.
+
+#### B. Normal AWG 2 deployment and migration
+
+Continue the normal update only after Phase A succeeds. The application creates
+the legacy backup during this migration, not during image capture:
+
+```bash
+set -eu
+cd /opt/amnezia-wg-ui
+docker compose pull
+docker compose up -d
+docker exec amnezia-wg-ui test -f /etc/wireguard/wg0.awg1.backup.json
+```
+
+If the final `test` fails, stop and investigate before distributing profiles.
+After it succeeds, download every client profile again. Do not overwrite or
+delete the backup while acceptance testing is in progress.
+
+#### C. Only after migration fails: restore AWG 1
+
+For the installer deployment under `/opt/amnezia-wg-ui`, run this only after
+Phase B has created `wg0.awg1.backup.json`. It reads the stable tag saved in
+Phase A, never tags the current AWG 2 container, and resolves the actual
+Compose-created volume name instead of assuming `awg_data` or a project prefix.
+
+```bash
+set -eu
+cd /opt/amnezia-wg-ui
+CONTAINER=amnezia-wg-ui
+ROLLBACK_IMAGE="$(cat .awg1-rollback-image)"
+test "$ROLLBACK_IMAGE" = 'local/amnezia-wg-ui:awg1-rollback'
+docker image inspect "$ROLLBACK_IMAGE" >/dev/null
+
+# Resolve and validate the current container's named /etc/wireguard volume
+# before Compose removes/recreates that container.
 WIREGUARD_MOUNT_TYPE="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/wireguard"}}{{.Type}}{{end}}{{end}}' "$CONTAINER")"
 test "$WIREGUARD_MOUNT_TYPE" = volume
 WIREGUARD_VOLUME="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/wireguard"}}{{if eq .Type "volume"}}{{.Name}}{{end}}{{end}}{{end}}' "$CONTAINER")"
 test -n "$WIREGUARD_VOLUME"
 docker volume inspect "$WIREGUARD_VOLUME" >/dev/null
 
-# Stop the service, then verify and restore the migration backup in that volume.
+# Stop AWG 2, then verify and restore the migration backup in that exact volume.
 docker compose stop amnezia-wg-ui
 docker run --rm -v "$WIREGUARD_VOLUME:/etc/wireguard" alpine:3.20 \
   sh -ec 'test -f /etc/wireguard/wg0.awg1.backup.json; cp /etc/wireguard/wg0.awg1.backup.json /etc/wireguard/wg0.json'
 
-# Recreate the service with the saved pre-update image (the override is temporary).
+# Recreate the service with the saved pre-upgrade AWG 1 image.
 ROLLBACK_OVERRIDE="$(mktemp)"
 trap 'rm -f "$ROLLBACK_OVERRIDE"' EXIT
 printf 'services:\n  amnezia-wg-ui:\n    image: %s\n' "$ROLLBACK_IMAGE" > "$ROLLBACK_OVERRIDE"
@@ -284,24 +323,25 @@ docker compose -f docker-compose.yml -f "$ROLLBACK_OVERRIDE" up -d --force-recre
 The `test` commands stop on a missing or wrong-type mount, and the helper uses
 only the resolved volume name. Do not run `docker compose down -v`; that would
 remove the data needed for rollback. The temporary Compose override is removed
-by the `trap` after the previous image is running.
+by the `trap` after the saved AWG 1 image is running.
 
-For a bind-mounted data directory, resolve and tag the previous image before
-stopping/removing the container, then copy the backup in the host directory and
-re-run the original `docker run` command with the saved tag:
+For a bind-mounted data directory, use the same Phase A tag and Phase B timing.
+After migration, use this Phase C variant; it validates the current container's
+bind source before removal and then re-runs the original command with the saved
+AWG 1 tag:
 
 ```bash
 set -eu
+cd /opt/amnezia-wg-ui
 CONTAINER=amnezia-wg-ui
-PREVIOUS_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$CONTAINER")"
-test -n "$PREVIOUS_IMAGE_ID"
-ROLLBACK_IMAGE="local/amnezia-wg-ui:rollback-$(date -u +%Y%m%dT%H%M%SZ)"
-docker image tag "$PREVIOUS_IMAGE_ID" "$ROLLBACK_IMAGE"
-docker stop amnezia-wg-ui
-docker rm amnezia-wg-ui
-# Set this to the bind mount used by the original docker run command.
-BIND_WIREGUARD_DIR=/path/to/wireguard
+ROLLBACK_IMAGE="$(cat .awg1-rollback-image)"
+test "$ROLLBACK_IMAGE" = 'local/amnezia-wg-ui:awg1-rollback'
+docker image inspect "$ROLLBACK_IMAGE" >/dev/null
+BIND_WIREGUARD_DIR="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/wireguard"}}{{if eq .Type "bind"}}{{.Source}}{{end}}{{end}}{{end}}' "$CONTAINER")"
+test -n "$BIND_WIREGUARD_DIR"
 test -f "$BIND_WIREGUARD_DIR/wg0.awg1.backup.json"
+docker stop "$CONTAINER"
+docker rm "$CONTAINER"
 cp "$BIND_WIREGUARD_DIR/wg0.awg1.backup.json" "$BIND_WIREGUARD_DIR/wg0.json"
 # Re-run the original docker run command with "$ROLLBACK_IMAGE" as its image.
 ```
