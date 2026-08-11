@@ -68,8 +68,9 @@ module.exports = class WireGuard {
       const loaded = await configFiles.readJsonConfig(path.join(this.wgPath, 'wg0.json'));
       if (!loaded.exists) {
         const privateKey = await this.exec('wg genkey');
-        const publicKey = await this.exec(`echo ${privateKey} | wg pubkey`, {
-          log: 'echo ***hidden*** | wg pubkey',
+        const publicKey = await this.exec('wg pubkey', {
+          input: privateKey,
+          log: 'wg pubkey',
         });
         debug('Configuration generated.');
         return {
@@ -101,31 +102,45 @@ module.exports = class WireGuard {
       return result;
     });
 
-    this.__configPromise = Promise.resolve(migration.config);
-    return this.__configPromise;
+    return migration.config;
+  }
+
+  async __initializeConfig() {
+    const config = await this.__buildConfig();
+
+    await this.__saveConfig(config);
+    await this.exec('wg-quick down wg0').catch(() => {});
+    await this.exec('wg-quick up wg0').catch((err) => {
+      if (err && err.message && err.message.includes('Cannot find device "wg0"')) {
+        throw new Error('WireGuard exited with the error: Cannot find device "wg0"\nThis usually means that your host\'s kernel does not support WireGuard!');
+      }
+
+      throw err;
+    });
+    // await this.exec(`iptables -t nat -A POSTROUTING -s ${WG_DEFAULT_ADDRESS.replace('x', '0')}/24 -o ' + WG_DEVICE + ' -j MASQUERADE`);
+    // await this.exec('iptables -A INPUT -p udp -m udp --dport 51820 -j ACCEPT');
+    // await this.exec('iptables -A FORWARD -i wg0 -j ACCEPT');
+    // await this.exec('iptables -A FORWARD -o wg0 -j ACCEPT');
+    await this.__syncConfig();
+    return config;
   }
 
   async getConfig() {
-    if (!this.__configPromise) {
-      const config = await this.__buildConfig();
-
-      await this.__saveConfig(config);
-      await this.exec('wg-quick down wg0').catch(() => {});
-      await this.exec('wg-quick up wg0').catch((err) => {
-        if (err && err.message && err.message.includes('Cannot find device "wg0"')) {
-          throw new Error('WireGuard exited with the error: Cannot find device "wg0"\nThis usually means that your host\'s kernel does not support WireGuard!');
-        }
-
-        throw err;
-      });
-      // await this.exec(`iptables -t nat -A POSTROUTING -s ${WG_DEFAULT_ADDRESS.replace('x', '0')}/24 -o ' + WG_DEVICE + ' -j MASQUERADE`);
-      // await this.exec('iptables -A INPUT -p udp -m udp --dport 51820 -j ACCEPT');
-      // await this.exec('iptables -A FORWARD -i wg0 -j ACCEPT');
-      // await this.exec('iptables -A FORWARD -o wg0 -j ACCEPT');
-      await this.__syncConfig();
+    if (this.__configPromise) {
+      return this.__configPromise;
+    }
+    if (!this.__initializationPromise) {
+      this.__initializationPromise = this.__initializeConfig()
+        .then((config) => {
+          this.__configPromise = Promise.resolve(config);
+          return config;
+        })
+        .finally(() => {
+          this.__initializationPromise = undefined;
+        });
     }
 
-    return this.__configPromise;
+    return this.__initializationPromise;
   }
 
   async saveConfig() {
@@ -315,8 +330,9 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     const config = await this.getConfig();
 
     const privateKey = await this.exec('wg genkey');
-    const publicKey = await this.exec(`echo ${privateKey} | wg pubkey`, {
-      log: 'echo ***hidden*** | wg pubkey',
+    const publicKey = await this.exec('wg pubkey', {
+      input: privateKey,
+      log: 'wg pubkey',
     });
     const preSharedKey = await this.exec('wg genpsk');
 
@@ -587,7 +603,8 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
   }
 
   async __reloadConfig() {
-    await this.__buildConfig();
+    const config = await this.__buildConfig();
+    this.__configPromise = Promise.resolve(config);
     await this.__syncConfig();
   }
 

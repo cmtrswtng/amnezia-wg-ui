@@ -95,9 +95,60 @@ describe('WireGuard AWG 2 startup migration', () => {
     });
     await expect(fs.readFile(path.join(tempDir, 'wg0.json'), 'utf8'))
       .resolves.toContain('"protocolVersion": 2');
-    expect(exec).toHaveBeenNthCalledWith(2, 'echo private-key | wg pubkey', {
-      log: 'echo ***hidden*** | wg pubkey',
+    expect(exec).toHaveBeenNthCalledWith(2, 'wg pubkey', {
+      input: 'private-key',
+      log: 'wg pubkey',
     });
+    const [command, options] = exec.mock.calls[1];
+    expect(command).not.toContain('private-key');
+    expect(options.log).not.toContain('private-key');
+  });
+
+  it('shares one complete initialization sequence between concurrent callers', async () => {
+    const writeFileAtomic = vi.spyOn(fileHelpers, 'writeFileAtomic');
+    const exec = createExec();
+    const wg = new WireGuard({
+      wgPath: tempDir,
+      env: { WG_HOST: 'vpn.example.test' },
+      exec,
+      randomInt: sequentialRandom(),
+    });
+
+    const [first, second] = await Promise.all([wg.getConfig(), wg.getConfig()]);
+
+    expect(first).toBe(second);
+    expect(exec.mock.calls.filter(([command]) => command === 'wg genkey')).toHaveLength(1);
+    expect(exec.mock.calls.filter(([command]) => command === 'wg pubkey')).toHaveLength(1);
+    expect(writeFileAtomic).toHaveBeenCalledTimes(2);
+    expect(exec.mock.calls.filter(([command]) => command === 'wg-quick down wg0')).toHaveLength(1);
+    expect(exec.mock.calls.filter(([command]) => command === 'wg-quick up wg0')).toHaveLength(1);
+    expect(exec.mock.calls.filter(([command]) => command === 'wg syncconf wg0 <(wg-quick strip wg0)')).toHaveLength(1);
+  });
+
+  it('derives client public keys through stdin without exposing the private key in command options', async () => {
+    const exec = vi.fn(async (command) => {
+      if (command === 'wg genkey') return 'client-private-key';
+      if (command === 'wg pubkey') return 'client-public-key';
+      return 'client-pre-shared-key';
+    });
+    const wg = new WireGuard({
+      wgPath: tempDir,
+      env: { WG_HOST: 'vpn.example.test' },
+      exec,
+    });
+    const config = validConfig();
+    wg.getConfig = async () => config;
+    wg.saveConfig = vi.fn();
+
+    await wg.createClient({ name: 'Alice' });
+
+    expect(exec).toHaveBeenNthCalledWith(2, 'wg pubkey', {
+      input: 'client-private-key',
+      log: 'wg pubkey',
+    });
+    const [command, options] = exec.mock.calls[1];
+    expect(command).not.toContain('client-private-key');
+    expect(options.log).not.toContain('client-private-key');
   });
 
   it('rejects corrupt JSON before generating keys, persisting files, or changing the interface', async () => {

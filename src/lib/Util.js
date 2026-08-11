@@ -54,6 +54,7 @@ module.exports = class Util {
 
   static async exec(cmd, {
     log = true,
+    input,
   } = {}) {
     if (typeof log === 'string') {
       // eslint-disable-next-line no-console
@@ -68,12 +69,15 @@ module.exports = class Util {
     }
 
     return new Promise((resolve, reject) => {
-      childProcess.exec(cmd, {
+      const child = childProcess.exec(cmd, {
         shell: 'bash',
       }, (err, stdout) => {
         if (err) return reject(err);
         return resolve(String(stdout).trim());
       });
+      if (input !== undefined) {
+        child.stdin.end(input);
+      }
     });
   }
 
