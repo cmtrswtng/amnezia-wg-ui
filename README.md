@@ -209,7 +209,9 @@ plan a short client refresh window:
    `/etc/wireguard/wg0.awg1.backup.json`:
 
    ```bash
-   docker exec amnezia-wg-ui test -f /etc/wireguard/wg0.awg1.backup.json
+   # Installer deployment: amnezia-wg-ui; repository Compose: amnezia-wg-easy.
+   CONTAINER=amnezia-wg-ui
+   docker exec "$CONTAINER" test -f /etc/wireguard/wg0.awg1.backup.json
    ```
 
 4. Download every client `.conf` again from the admin panel.
@@ -278,14 +280,15 @@ set -eu
 cd /opt/amnezia-wg-ui
 docker compose pull
 docker compose up -d
-docker exec amnezia-wg-ui test -f /etc/wireguard/wg0.awg1.backup.json
+CONTAINER=amnezia-wg-ui
+docker exec "$CONTAINER" test -f /etc/wireguard/wg0.awg1.backup.json
 ```
 
 If the final `test` fails, stop and investigate before distributing profiles.
 After it succeeds, download every client profile again. Do not overwrite or
 delete the backup while acceptance testing is in progress.
 
-#### C. Only after migration fails: restore AWG 1
+#### C. After a failed migration or platform acceptance: restore AWG 1
 
 For the installer deployment under `/opt/amnezia-wg-ui`, run this only after
 Phase B has created `wg0.awg1.backup.json`. It reads the stable tag saved in

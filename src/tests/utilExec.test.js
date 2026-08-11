@@ -37,19 +37,22 @@ describe('Util.exec', () => {
     Object.defineProperty(process, 'platform', { value: 'linux' });
     const commandError = new Error('Command failed: wg pubkey');
     const stdin = { end: vi.fn() };
-    vi.spyOn(childProcess, 'exec').mockImplementation((command, options, callback) => {
+    const exec = vi.spyOn(childProcess, 'exec').mockImplementation((command, options, callback) => {
       callback(commandError, '');
       return { stdin };
     });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     let error;
     try {
-      await Util.exec('wg pubkey', { input: 'private-key', log: false });
+      await Util.exec('wg pubkey', { input: 'private-key', log: 'wg pubkey' });
     } catch (err) {
       error = err;
     }
 
     expect(error.message).toContain('wg pubkey');
     expect(error.message).not.toContain('private-key');
+    expect(exec.mock.calls.flat().join(' ')).not.toContain('private-key');
+    expect(log.mock.calls.flat().join(' ')).not.toContain('private-key');
   });
 });

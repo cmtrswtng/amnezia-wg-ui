@@ -15,9 +15,9 @@ const readJsonConfig = async (filePath, fsApi = fs) => {
   try {
     return { exists: true, raw, config: JSON.parse(raw) };
   } catch (err) {
-    const parseError = new Error(
-      `Cannot parse WireGuard configuration ${filePath}: ${err.message}`,
-    );
+    const position = /position\s+(\d+)/i.exec(err.message)?.[1];
+    const location = position === undefined ? 'location unavailable' : `at JSON position ${position}`;
+    const parseError = new Error(`Cannot parse WireGuard configuration ${filePath}: ${location}`);
     parseError.name = 'WireGuardConfigParseError';
     throw parseError;
   }
@@ -28,7 +28,24 @@ const createBackupOnce = async (filePath, raw, fsApi = fs) => {
     await fsApi.writeFile(filePath, raw, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     return 'created';
   } catch (err) {
-    if (err.code === 'EEXIST') return 'exists';
+    if (err.code === 'EEXIST') {
+      try {
+        const stats = await fsApi.stat(filePath);
+        if (!stats.isFile()) throw new Error('not a regular file');
+        const existing = await fsApi.readFile(filePath, 'utf8');
+        if (existing !== raw) {
+          throw new Error(
+            `Existing legacy WireGuard backup ${filePath} does not match the configuration being migrated; preserve both files and restore the intended AWG 1 state before retrying`,
+          );
+        }
+        return 'exists';
+      } catch (backupError) {
+        if (backupError.message.startsWith('Existing legacy WireGuard backup')) throw backupError;
+        throw new Error(
+          `Existing legacy WireGuard backup ${filePath} is not a readable regular file; preserve it and fix its type or permissions before retrying`,
+        );
+      }
+    }
     throw new Error(`Cannot create legacy WireGuard backup ${filePath}: ${err.message}`);
   }
 };

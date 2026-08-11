@@ -4,6 +4,40 @@ const crypto = require('node:crypto');
 
 const PROTOCOL_VERSION = 2;
 
+const isPlainObject = (value) => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+const requireString = (prefix, object, field) => {
+  if (typeof object[field] !== 'string' || object[field].length === 0) {
+    throw new Error(`${prefix}: ${field} must be a non-empty string`);
+  }
+};
+
+const validateCoreConfigShape = (config, prefix) => {
+  if (!isPlainObject(config)) throw new Error(`${prefix}: top-level value must be a plain object`);
+  if (!isPlainObject(config.server)) throw new Error(`${prefix}: server must be a plain object`);
+  if (!isPlainObject(config.clients)) throw new Error(`${prefix}: clients must be a plain object`);
+  ['privateKey', 'publicKey', 'address'].forEach((field) => requireString(prefix, config.server, field));
+  Object.entries(config.clients).forEach(([clientId, client]) => {
+    if (!isPlainObject(client)) {
+      throw new Error(`${prefix}: client ${clientId} must be a plain object`);
+    }
+    ['name', 'address', 'publicKey'].forEach((field) => requireString(`${prefix}: client ${clientId}`, client, field));
+    if (typeof client.enabled !== 'boolean') {
+      throw new Error(`${prefix}: client ${clientId}: enabled must be a boolean`);
+    }
+    ['privateKey', 'preSharedKey'].forEach((field) => {
+      if (client[field] !== undefined && typeof client[field] !== 'string') {
+        throw new Error(`${prefix}: client ${clientId}: ${field} must be a string when present`);
+      }
+    });
+  });
+  return config;
+};
+
 const parseInteger = (name, value) => {
   if (typeof value === 'number' && Number.isInteger(value)) return value;
   if (typeof value !== 'string' || !/^-?\d+$/.test(value)) {
@@ -23,6 +57,9 @@ const assertRange = (name, value, min, max) => {
 };
 
 const validateAwg2Parameters = (server) => {
+  if (!isPlainObject(server)) {
+    throw new Error('Invalid AWG 2 parameters: server must be a plain object');
+  }
   assertRange('JC', server.jc, 0, 128);
   assertRange('JMIN', server.jmin, 0, 1279);
   assertRange('JMAX', server.jmax, 0, 1279);
@@ -43,6 +80,16 @@ const validateAwg2Parameters = (server) => {
     }
   });
   return server;
+};
+
+const validatePersistedConfig = (config) => {
+  const prefix = 'Invalid AWG 2 WireGuard configuration';
+  validateCoreConfigShape(config, prefix);
+  if (config.protocolVersion !== PROTOCOL_VERSION) {
+    throw new Error(`${prefix}: protocolVersion must be ${PROTOCOL_VERSION}`);
+  }
+  validateAwg2Parameters(config.server);
+  return config;
 };
 
 const createAwg2Parameters = ({
@@ -91,16 +138,17 @@ const createAwg2Parameters = ({
 };
 
 const migrateConfigToAwg2 = (config, options = {}) => {
+  if (!isPlainObject(config)) {
+    throw new Error('Invalid legacy WireGuard configuration: top-level value must be a plain object');
+  }
   if (config.protocolVersion === PROTOCOL_VERSION) {
-    validateAwg2Parameters(config.server);
+    validatePersistedConfig(config);
     return { config, migrated: false };
   }
   if (config.protocolVersion !== undefined) {
     throw new Error(`Unsupported AmneziaWG protocol version: ${config.protocolVersion}`);
   }
-  if (!config.server || !config.clients || typeof config.clients !== 'object') {
-    throw new Error('Invalid legacy WireGuard configuration: server and clients are required');
-  }
+  validateCoreConfigShape(config, 'Invalid legacy WireGuard configuration');
   const parameters = createAwg2Parameters(options);
   return {
     migrated: true,
@@ -132,6 +180,7 @@ module.exports = {
   PROTOCOL_VERSION,
   createAwg2Parameters,
   validateAwg2Parameters,
+  validatePersistedConfig,
   migrateConfigToAwg2,
   renderAwg2InterfaceLines,
 };

@@ -5,6 +5,7 @@
 const {
   createAwg2Parameters,
   validateAwg2Parameters,
+  validatePersistedConfig,
   migrateConfigToAwg2,
   renderAwg2InterfaceLines,
 } = require('../lib/awgConfig');
@@ -38,6 +39,26 @@ const validServer = (overrides = {}) => ({
   i3: '',
   i4: '',
   i5: '',
+  ...overrides,
+});
+
+const validPersistedConfig = (overrides = {}) => ({
+  protocolVersion: 2,
+  server: validServer({
+    privateKey: 'server-private',
+    publicKey: 'server-public',
+    address: '10.8.0.1',
+  }),
+  clients: {
+    alice: {
+      name: 'Alice',
+      enabled: true,
+      address: '10.8.0.2',
+      privateKey: 'client-private',
+      publicKey: 'client-public',
+      preSharedKey: 'client-psk',
+    },
+  },
   ...overrides,
 });
 
@@ -176,11 +197,17 @@ describe('migrateConfigToAwg2', () => {
   const legacyConfig = {
     server: {
       privateKey: 'private-key',
-      address: '10.0.0.1/24',
+      publicKey: 'public-key',
+      address: '10.0.0.1',
     },
     clients: {
       client1: {
         name: 'Alice',
+        enabled: true,
+        address: '10.0.0.2',
+        privateKey: 'alice-private',
+        publicKey: 'alice-public',
+        preSharedKey: 'alice-psk',
         tags: ['tag'],
         expirationDate: '2026-12-01',
         quotaBytes: 100,
@@ -205,7 +232,7 @@ describe('migrateConfigToAwg2', () => {
   });
 
   it('returns valid version-2 configs unchanged and is idempotent', () => {
-    const config = { protocolVersion: 2, server: validServer(), clients: {} };
+    const config = validPersistedConfig({ clients: {} });
     const result = migrateConfigToAwg2(config);
     expect(result).toEqual({ config, migrated: false });
     expect(migrateConfigToAwg2(result.config)).toEqual({ config, migrated: false });
@@ -215,7 +242,44 @@ describe('migrateConfigToAwg2', () => {
     expect(() => migrateConfigToAwg2({ protocolVersion: 3 }))
       .toThrow('Unsupported AmneziaWG protocol version: 3');
     expect(() => migrateConfigToAwg2({ clients: {} }))
-      .toThrow('Invalid legacy WireGuard configuration: server and clients are required');
+      .toThrow('Invalid legacy WireGuard configuration: server must be a plain object');
+  });
+
+  it.each([
+    ['array top level', []],
+    ['array server', { server: [], clients: {} }],
+    ['array clients', { server: legacyConfig.server, clients: [] }],
+    ['malformed client entry', { server: legacyConfig.server, clients: { alice: [] } }],
+    ['missing server public key', {
+      server: { privateKey: 'private', address: '10.8.0.1' }, clients: {},
+    }],
+    ['missing client address', {
+      server: legacyConfig.server,
+      clients: { alice: { name: 'Alice', enabled: true, publicKey: 'public' } },
+    }],
+  ])('rejects malformed legacy shape: %s', (description, config) => {
+    expect(() => migrateConfigToAwg2(config)).toThrow('Invalid legacy WireGuard configuration');
+  });
+});
+
+describe('validatePersistedConfig', () => {
+  it('accepts a complete v2 config', () => {
+    const config = validPersistedConfig();
+    expect(validatePersistedConfig(config)).toBe(config);
+  });
+
+  it.each([
+    ['array top level', []],
+    ['array clients', validPersistedConfig({ clients: [] })],
+    ['malformed client', validPersistedConfig({ clients: { alice: null } })],
+    ['missing server address', validPersistedConfig({
+      server: validServer({ privateKey: 'private', publicKey: 'public' }),
+    })],
+    ['missing client public key', validPersistedConfig({
+      clients: { alice: { name: 'Alice', enabled: true, address: '10.8.0.2' } },
+    })],
+  ])('rejects malformed v2 shape: %s', (description, config) => {
+    expect(() => validatePersistedConfig(config)).toThrow('Invalid AWG 2 WireGuard configuration');
   });
 });
 

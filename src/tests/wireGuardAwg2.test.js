@@ -186,6 +186,34 @@ describe('WireGuard AWG 2 startup migration', () => {
     await expect(fs.readFile(path.join(tempDir, 'wg0.json'), 'utf8')).resolves.toBe('{broken');
   });
 
+  it.each([
+    ['legacy server array', { server: [], clients: {} }],
+    ['legacy malformed client', {
+      server: { privateKey: 'private', publicKey: 'public', address: '10.8.0.1' },
+      clients: { alice: [] },
+    }],
+    ['v2 missing server address', {
+      ...validConfig(), server: { ...validConfig().server, address: undefined },
+    }],
+    ['v2 malformed client', { ...validConfig(), clients: { alice: null } }],
+  ])('rejects malformed persisted state with no backup, active write, or interface command: %s', async (description, malformed) => {
+    const activePath = path.join(tempDir, 'wg0.json');
+    const raw = JSON.stringify(malformed);
+    await fs.writeFile(activePath, raw, 'utf8');
+    const backup = vi.spyOn(fileHelpers, 'createBackupOnce');
+    const write = vi.spyOn(fileHelpers, 'writeFileAtomic');
+    const exec = createExec();
+    const wg = new WireGuard({
+      wgPath: tempDir, env: { WG_HOST: 'vpn.example.test' }, exec, randomInt: sequentialRandom(),
+    });
+
+    await expect(wg.getConfig()).rejects.toThrow(/Invalid (legacy|AWG 2) WireGuard configuration/);
+    expect(backup).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
+    await expect(fs.readFile(activePath, 'utf8')).resolves.toBe(raw);
+  });
+
   it('backs up and migrates legacy state once while preserving client metadata', async () => {
     const legacy = {
       server: {
@@ -198,7 +226,9 @@ describe('WireGuard AWG 2 startup migration', () => {
           name: 'Alice',
           enabled: true,
           address: '10.8.0.2',
+          privateKey: 'alice-private',
           publicKey: 'alice-public',
+          preSharedKey: 'alice-preshared',
           tags: ['team'],
           oneTimeLink: 'opaque',
           quotaBytes: 100,
@@ -218,7 +248,18 @@ describe('WireGuard AWG 2 startup migration', () => {
     expect(config.clients).toEqual(legacy.clients);
     expect(config.extra).toEqual(legacy.extra);
     expect(config.protocolVersion).toBe(2);
-    expect(config.server).toMatchObject({ privateKey: 'legacy-private', s3: 17, s4: 8 });
+    expect(config.server).toMatchObject({
+      privateKey: legacy.server.privateKey,
+      publicKey: legacy.server.publicKey,
+      address: legacy.server.address,
+      s3: 17,
+      s4: 8,
+    });
+    expect(config.clients.alice).toMatchObject({
+      privateKey: legacy.clients.alice.privateKey,
+      publicKey: legacy.clients.alice.publicKey,
+      preSharedKey: legacy.clients.alice.preSharedKey,
+    });
     await expect(fs.readFile(backupPath, 'utf8')).resolves.toBe(raw);
     const backupStats = await fs.stat(backupPath);
     expect(backupStats.mode & 0o777).toBe(process.platform === 'win32' ? 0o666 : 0o600);
@@ -230,6 +271,45 @@ describe('WireGuard AWG 2 startup migration', () => {
     await second.getConfig();
     await expect(fs.readFile(backupPath, 'utf8')).resolves.toBe(raw);
     await expect(fs.readFile(path.join(tempDir, 'wg0.json'), 'utf8')).resolves.toBe(activeBytes);
+  });
+
+  it('continues a re-upgrade only when the existing legacy backup is byte-identical', async () => {
+    const legacy = {
+      server: { privateKey: 'private', publicKey: 'public', address: '10.8.0.1' },
+      clients: {},
+    };
+    const raw = JSON.stringify(legacy, null, 2);
+    await fs.writeFile(path.join(tempDir, 'wg0.json'), raw, 'utf8');
+    await fs.writeFile(path.join(tempDir, 'wg0.awg1.backup.json'), raw, 'utf8');
+    const exec = createExec();
+    const wg = new WireGuard({
+      wgPath: tempDir, env: { WG_HOST: 'vpn.example.test' }, exec, randomInt: sequentialRandom(),
+    });
+
+    await expect(wg.getConfig()).resolves.toMatchObject({ protocolVersion: 2 });
+    await expect(fs.readFile(path.join(tempDir, 'wg0.awg1.backup.json'), 'utf8')).resolves.toBe(raw);
+    expect(exec).toHaveBeenCalledWith('wg-quick up wg0');
+  });
+
+  it('aborts a re-upgrade with a stale backup before active writes or interface commands', async () => {
+    const legacy = {
+      server: { privateKey: 'private', publicKey: 'public', address: '10.8.0.1' },
+      clients: {},
+    };
+    const activePath = path.join(tempDir, 'wg0.json');
+    const raw = JSON.stringify(legacy);
+    await fs.writeFile(activePath, raw, 'utf8');
+    await fs.writeFile(path.join(tempDir, 'wg0.awg1.backup.json'), '{"older":true}', 'utf8');
+    const write = vi.spyOn(fileHelpers, 'writeFileAtomic');
+    const exec = createExec();
+    const wg = new WireGuard({
+      wgPath: tempDir, env: { WG_HOST: 'vpn.example.test' }, exec, randomInt: sequentialRandom(),
+    });
+
+    await expect(wg.getConfig()).rejects.toThrow('does not match the configuration being migrated');
+    expect(write).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
+    await expect(fs.readFile(activePath, 'utf8')).resolves.toBe(raw);
   });
 
   it('rejects unsupported versions before any interface command', async () => {
@@ -283,6 +363,7 @@ describe('WireGuard AWG 2 startup migration', () => {
       wgPath: tempDir, env: { WG_HOST: 'vpn.example.test' }, exec: createExec(),
     });
     wg.getConfig = async () => config;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     await wg.__saveConfig(config);
     const serverProfile = await fs.readFile(path.join(tempDir, 'wg0.conf'), 'utf8');
@@ -297,6 +378,8 @@ describe('WireGuard AWG 2 startup migration', () => {
     expect(serverProfile).not.toContain('client-private-key');
     expect(clientProfile).toContain('PrivateKey = client-private-key');
     expect(clientProfile).not.toContain('server-private-key');
+    expect(log.mock.calls.flat().join(' ')).not.toContain('server-private-key');
+    expect(log.mock.calls.flat().join(' ')).not.toContain('client-private-key');
 
     config.server.i2 = '<b 0x02>';
     await wg.__saveConfig(config);
@@ -308,6 +391,20 @@ describe('WireGuard AWG 2 startup migration', () => {
     expect(clientWithI2).toContain(framingWithI2);
     expect(serverWithI2).toContain('I2 = <b 0x02>');
     expect(clientWithI2).toContain('I2 = <b 0x02>');
+  });
+
+  it('rejects malformed restored v2 data before active writes or interface commands', async () => {
+    const write = vi.spyOn(fileHelpers, 'writeFileAtomic');
+    const exec = createExec();
+    const wg = new WireGuard({
+      wgPath: tempDir, env: { WG_HOST: 'vpn.example.test' }, exec,
+    });
+
+    await expect(wg.restoreConfiguration(JSON.stringify({
+      ...validConfig(), clients: { alice: [] },
+    }))).rejects.toThrow('Invalid AWG 2 WireGuard configuration');
+    expect(write).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
   });
 
   it('returns a stable client profile for repeated downloads', async () => {
