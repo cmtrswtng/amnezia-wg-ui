@@ -238,6 +238,10 @@ after container restart and replacement with the same disposable volume, and
 removes its containers, network and volumes. It requires
 outbound DNS access. CI runs it before publishing an image.
 
+The Docker host needs the legacy netfilter filter/NAT modules used by this
+image. CI loads `iptable_filter` and `iptable_nat` on the host before its tunnel
+test; the container does not mount the host's `/lib/modules`.
+
 For hot reload: `npm run serve:dev`. The React UI is on port 5173 and proxies to
 the configured backend. On restricted Windows environments, set `TEMP`/`TMP` to
 an ignored directory inside `src/node_modules` when testing atomic file writes.

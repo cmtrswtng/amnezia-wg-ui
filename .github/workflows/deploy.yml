@@ -50,6 +50,11 @@ jobs:
     - name: Verify AWG tooling
       run: docker run --rm --entrypoint sh amnezia-wg-ui:awg31-smoke -c "command -v amneziawg-go && wg --version && command -v wg-quick && node --version"
 
+    - name: Load host netfilter modules for the tunnel test
+      run: |
+        sudo modprobe iptable_filter
+        sudo modprobe iptable_nat
+
     - name: Verify fresh and migrated AWG tunnels and DNS
       run: timeout 120s bash scripts/smoke-awg31.sh amnezia-wg-ui:awg31-smoke
 
