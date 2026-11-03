@@ -5,6 +5,7 @@ require('./services/Server');
 const WireGuard = require('./services/WireGuard');
 
 WireGuard.getConfig()
+  .then(() => WireGuard.startTrafficSampling())
   .catch((err) => {
   // eslint-disable-next-line no-console
     console.error(err);
@@ -14,16 +15,14 @@ WireGuard.getConfig()
   });
 
 // Handle terminate signal
-process.on('SIGTERM', async () => {
+const shutdown = async () => {
   // eslint-disable-next-line no-console
-  console.log('SIGTERM signal received.');
+  console.log('Shutting down.');
   await WireGuard.Shutdown();
   // eslint-disable-next-line no-process-exit
   process.exit(0);
-});
+};
+process.once('SIGTERM', shutdown);
 
 // Handle interrupt signal
-process.on('SIGINT', () => {
-  // eslint-disable-next-line no-console
-  console.log('SIGINT signal received.');
-});
+process.once('SIGINT', shutdown);

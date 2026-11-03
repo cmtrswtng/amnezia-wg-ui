@@ -2,390 +2,251 @@
 
 # AmneziaWG UI
 
-**The easiest way to run AmneziaWG VPN — with an admin panel built for managing and selling access.**
+**AmneziaWG 3.1 and a React admin for managing VPN access.**
 
-[![fork of w0rng/amnezia-wg-easy](https://img.shields.io/badge/fork%20of-w0rng%2Famnezia--wg--easy-lightgrey)](https://github.com/w0rng/amnezia-wg-easy)
-[![build](https://img.shields.io/github/actions/workflow/status/cmtrswtng/amnezia-wg-ui/deploy.yml?branch=master)](https://github.com/cmtrswtng/amnezia-wg-ui/actions)
 [![image](https://img.shields.io/badge/ghcr.io-cmtrswtng%2Famnezia--wg--ui-blue)](https://github.com/cmtrswtng/amnezia-wg-ui/pkgs/container/amnezia-wg-ui)
 [![license](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-orange)](./LICENSE)
 
-<img src="./assets/screenshot.png" width="802" />
+<img src="./assets/screenshot.png" width="1100" alt="React admin with client cards, connection activity, search and filters" />
 
 </div>
 
-## ✨ Features
+## Features
 
-* 🚀 **All-in-one**: AmneziaWG + Web UI in a single container.
-* 🖥️ **Modern dark admin UI** (Vue 3) — fast, clean, mobile-friendly.
-* 👥 **Clients**: list, create, edit, delete, enable & disable, QR codes, downloadable configs.
-* 🏷️ **Tags** — free-form labels with filtering and autocomplete. Know where each client came from.
-* ⏳ **Expiry dates** — configs auto-disable when the time runs out; renew in one click.
-* 📊 **Traffic quotas** — «N GB per M days» per client, auto-disable on exceed, new cycle on renewal.
-* ✅ **Bulk actions** — extend, tag, enable/disable, reset quota, delete — for many clients at once.
-* 📈 **Sales dashboard** — expiring soon, new clients this month, top by traffic.
-* 🧾 **Audit log** — who created/changed/disabled what, including automatic cron events.
-* 🌍 **20 languages** out of the box.
-* 🔗 **One-time links** (optional), **Prometheus metrics**, Tx/Rx charts, Gravatar/DiceBear avatars.
+- AmneziaWG Go **3.1.20260828**, bundled AWG tools, and Node 24; `linux/amd64`.
+- React **19.3.1** admin with cloud-white surfaces, sky-blue details and a muted
+  rose accent. System fonts, local React Bits SpotlightCard/CountUp/AnimatedContent
+  adaptations, keyboard dialogs and reduced-motion support.
+- Search by name, IP or tag; combined access/connection/tag filters; sorting by
+  name, handshake, traffic or expiry; card and compact-list views.
+- A recent handshake is shown separately from permission to connect. “Online”
+  means a handshake within 3 minutes, not a guarantee of current reachability.
+- Clients, QR codes, config downloads, optional one-time links, tags and expiry.
+- Traffic quotas, renewal, quota reset, bulk actions, overview and audit log.
+- SQLite stores client records, settings and cumulative traffic in the existing
+  data volume. Counters survive server restarts and container replacement.
+- Backup/restore, preserved translations, optional avatars, traffic charts,
+  live rates, and Prometheus metrics.
 
-## Requirements
+## New installation
 
-* A host with Docker installed.
+Requires a Linux Docker host with `/dev/net/tun` and Docker Compose. The published
+image targets AMD64; ARM publishing is not part of this release.
 
-## Installation
+```bash
+git clone https://github.com/cmtrswtng/amnezia-wg-ui.git
+cd amnezia-wg-ui
+cp .env.example .env
+# Set WG_HOST to your public IP or hostname.
+npm --prefix src ci
+node src/setup-password.mjs
+docker compose up --build -d
+```
 
-### One-line installer (recommended)
+Open `http://YOUR_SERVER:51821` (or your configured `PORT`). Open `WG_PORT/udp`
+in the host/cloud firewall. The repository Compose file builds this checkout;
+it no longer points at the upstream fork's image.
 
-Run on your Linux as root:
+The Linux installer is also available:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/cmtrswtng/amnezia-wg-ui/master/install.sh)
 ```
 
-The script will:
+The installer writes `/opt/amnezia-wg-ui/.env`, Compose settings and an admin
+password hash; VPN data is retained in its Docker volume. Never use
+`docker compose down -v` when you want to preserve clients and keys.
 
-1. Install Docker (via the official `get.docker.com` script) if it's missing.
-2. Auto-detect the server's public IP and ask you to confirm or edit it, then ask for the Web UI and WireGuard ports (defaults `51821` / `51820`).
-3. Ask for the admin password twice (hidden input) and generate its bcrypt hash using the Docker image itself — no Node.js needed on the host.
-4. Write `/opt/amnezia-wg-ui/.env` (mode `600`) and `/opt/amnezia-wg-ui/docker-compose.yml`.
-5. Open `51820/udp` and `51821/tcp` in `ufw` if it's active (otherwise it reminds you to open them in your cloud firewall).
-6. Start the container and **verify** that the password actually matches the hash seen by the running container.
+## Upgrading an existing server to 3.1
 
-When done it prints the Web UI URL (`http://<your-ip>:51821`).
+This is a breaking profile update. Existing client identities are retained, but
+**every device must import a newly downloaded profile** after migration.
+Use AmneziaVPN **5.0.1.5 or newer**, or a native AmneziaWG application that
+explicitly supports 3.1. Plain WireGuard and older AWG clients cannot parse all
+new fields. See the [official upgrade guidance](https://amnezia.org/ru/blog/amneziawg-3-1-is-here).
 
-**Updating:** just re-run the same one-liner — it detects the existing installation and offers to pull the latest image. To go through the full setup again (new password, ports, etc.), wipe `/opt/amnezia-wg-ui` first or edit the files there manually and run `docker compose up -d --force-recreate`.
-
-**Files and data:** everything lives in `/opt/amnezia-wg-ui`; clients, keys and the audit log are stored in the `awg_data` Docker volume — `docker compose down` keeps them, `down -v` deletes them.
-
-### 1. Install Docker (manual way)
-
-```bash
-curl -sSL https://get.docker.com | sh
-sudo usermod -aG docker $(whoami)
-exit
-```
-
-And log in again.
-
-### 2. Run AmneziaWG UI
-
-```bash
-docker run -d \
-  --name=amnezia-wg-ui \
-  -e LANG=en \
-  -e WG_HOST=<🚨YOUR_SERVER_IP> \
-  -e PASSWORD_HASH=<🚨YOUR_ADMIN_PASSWORD_HASH> \
-  -e PORT=51821 \
-  -e WG_PORT=51820 \
-  -v ~/.amnezia-wg-ui:/etc/wireguard \
-  -p 51820:51820/udp \
-  -p 51821:51821/tcp \
-  --cap-add=NET_ADMIN \
-  --cap-add=SYS_MODULE \
-  --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
-  --sysctl="net.ipv4.ip_forward=1" \
-  --device=/dev/net/tun:/dev/net/tun \
-  --restart unless-stopped \
-  ghcr.io/cmtrswtng/amnezia-wg-ui
-```
-
-> 💡 Replace `YOUR_SERVER_IP` with your WAN IP, or a Dynamic DNS hostname.
->
-> 💡 Replace `YOUR_ADMIN_PASSWORD_HASH` with a bcrypt password hash to log in on the Web UI.
-> The fastest way to get one — clone this repo and run:
->
-> ```bash
-> npm --prefix src ci && node src/setup-password.mjs
-> ```
->
-> It generates a random admin password, writes `PASSWORD_HASH` into your `.env` and prints the password once.
-> The classic interactive way also works: `docker run --rm -it ghcr.io/cmtrswtng/amnezia-wg-ui wgpw` —
-> see [How_to_generate_an_bcrypt_hash.md](./How_to_generate_an_bcrypt_hash.md).
-
-The Web UI will now be available on `http://0.0.0.0:51821`.
-
-The Prometheus metrics will now be available on `http://0.0.0.0:51821/metrics`. Grafana dashboard [21733](https://grafana.com/grafana/dashboards/21733-wireguard/)
-
-> 💡 Your configuration files will be saved in `~/.amnezia-wg-ui`
-
-### Docker Compose
-
-```bash
-git clone https://github.com/cmtrswtng/amnezia-wg-ui.git
-cd amnezia-wg-ui
-cp .env.example .env  # or create .env manually; at minimum set WG_HOST
-node src/setup-password.mjs   # optional but recommended: sets the admin password
-docker compose up --build -d
-```
-
-## Development
-
-For local development with hot reload, run:
-
-```bash
-npm run serve:dev
-```
-
-This starts the backend with nodemon (auto-restarts on code changes) and the admin UI
-via the Vite dev server on `http://localhost:5173` (hot reload, API proxied to the backend).
-The backend API itself is available on `$PORT` (default `51821`).
-
-## Options
-
-These options can be configured by setting environment variables using `-e KEY="VALUE"` in the `docker run` command.
-
-### AmneziaWG 2 configuration
-
-The server uses the pinned `amneziavpn/amneziawg-go:2.0.0` backend and publishes a
-`linux/amd64` image. The AWG parameters are interface-wide and are persisted in
-`wg0.json` with top-level `protocolVersion: 2`. On a fresh install or one-time
-legacy migration, the values below are generated (or taken from the environment)
-and validated before they are persisted. Once `protocolVersion: 2` exists,
-changing the environment does not silently rewrite the active framing values;
-edit the persisted configuration only as part of a planned migration.
-
-The generated defaults use independently randomized `S1`, `S2`, and `S3`
-values, plus non-zero `S3` and `S4`; `I1` through `I5` are empty unless
-explicitly configured. All newly generated client profiles must be
-downloaded after migration because old profiles contain the previous
-interface-wide framing parameters and cannot be expected to connect.
-
-| Env                           | Default           | Example                        | Description                                                                                                                                                                                                        |
-|-------------------------------|-------------------|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `PORT`                        | `51821`           | `6789`                         | TCP port for Web UI.                                                                                                                                                                                               |
-| `WEBUI_HOST`                  | `0.0.0.0`         | `localhost`                    | IP address web UI binds to.                                                                                                                                                                                        |
-| `PASSWORD_HASH`               | -                 | `$2y$05$Ci...`                 | When set, requires a password when logging in to the Web UI. Generate one with `node src/setup-password.mjs`.                                                                                                       |
-| `WG_HOST`                     | -                 | `vpn.myserver.com`             | The public hostname of your VPN server.                                                                                                                                                                            |
-| `WG_DEVICE`                   | `eth0`            | `ens6f0`                       | Ethernet device the wireguard traffic should be forwarded through.                                                                                                                                                 |
-| `WG_PORT`                     | `51820`           | `12345`                        | The public UDP port of your VPN server. WireGuard will listen on that (othwise default) inside the Docker container.                                                                                               |
-| `WG_CONFIG_PORT`              | `51820`           | `12345`                        | The UDP port used on [Home Assistant Plugin](https://github.com/adriy-be/homeassistant-addons-jdeath/tree/main/wgeasy)                                                                                             |
-| `WG_MTU`                      | `null`            | `1420`                         | The MTU the clients will use. Server uses default WG MTU.                                                                                                                                                          |
-| `WG_PERSISTENT_KEEPALIVE`     | `0`               | `25`                           | Value in seconds to keep the "connection" open. If this value is 0, then connections won't be kept alive.                                                                                                          |
-| `WG_DEFAULT_ADDRESS`          | `10.8.0.x`        | `10.6.0.x`                     | Clients IP address range.                                                                                                                                                                                          |
-| `WG_DEFAULT_DNS`              | `1.1.1.1`         | `8.8.8.8, 8.8.4.4`             | DNS server clients will use. If set to blank value, clients will not use any DNS.                                                                                                                                  |
-| `WG_ALLOWED_IPS`              | `0.0.0.0/0, ::/0` | `192.168.15.0/24, 10.0.1.0/24` | Allowed IPs clients will use.                                                                                                                                                                                      |
-| `WG_PRE_UP`                   | `...`             | -                              | See [config.js](./src/config.js) for the default value.                                                                                                                                                            |
-| `WG_POST_UP`                  | `...`             | `iptables ...`                 | See [config.js](./src/config.js) for the default value.                                                                                                                                                            |
-| `WG_PRE_DOWN`                 | `...`             | -                              | See [config.js](./src/config.js) for the default value.                                                                                                                                                            |
-| `WG_POST_DOWN`                | `...`             | `iptables ...`                 | See [config.js](./src/config.js) for the default value.                                                                                                                                                            |
-| `WG_ENABLE_EXPIRES_TIME`      | -                 | -                              | Deprecated: client expiry is now always enabled.                                                                                                                                                                   |
-| `LANG`                        | `en`              | `de`                           | Web UI language (Supports: en, ua, ru, tr, no, pl, fr, de, ca, es, ko, vi, nl, is, pt, chs, cht, it, th, hi).                                                                                                      |
-| `UI_TRAFFIC_STATS`            | `false`           | `true`                         | Enable detailed RX / TX client stats in Web UI                                                                                                                                                                     |
-| `UI_CHART_TYPE`               | `0`               | `1`                            | UI_CHART_TYPE=0 # Charts disabled, UI_CHART_TYPE=1 # Line chart, UI_CHART_TYPE=2 # Area chart, UI_CHART_TYPE=3 # Bar chart                                                                                         |
-| `DICEBEAR_TYPE`               | `false`           | `bottts`                       | see [dicebear styles](https://www.dicebear.com/styles/)                                                                                                                                                            |
-| `USE_GRAVATAR`                | `false`           | `true`                         | Use or not GRAVATAR service                                                                                                                                                                                        |
-| `WG_ENABLE_ONE_TIME_LINKS`    | `false`           | `true`                         | Enable display and generation of short one time download links (expire after 5 minutes)                                                                                                                            |
-| `MAX_AGE`                     | `0`               | `1440`                         | The maximum age of Web UI sessions in minutes. `0` means that the session will exist until the browser is closed.                                                                                                  |
-| `UI_ENABLE_SORT_CLIENTS`      | `false`           | `true`                         | Enable UI sort clients by name                                                                                                                                                                                     |
-| `ENABLE_PROMETHEUS_METRICS`   | `false`           | `true`                         | Enable Prometheus metrics `http://0.0.0.0:51821/metrics` and `http://0.0.0.0:51821/metrics/json`                                                                                                                   |
-| `PROMETHEUS_METRICS_PASSWORD` | -                 | `$2y$05$Ci...`                 | If set, Basic Auth is required when requesting metrics.                                                                                                                                                            |
-| `JC`                          | `random 4..8`     | `5`                            | Junk packet count. Validation: integer `0..128`.                                                                                                                                                                   |
-| `JMIN`                        | `64`              | `25`                           | Junk packet minimum size. Validation: integer `0..1279`, and no greater than `JMAX`.                                                                                                                               |
-| `JMAX`                        | `512`             | `250`                          | Junk packet maximum size. Validation: integer `0..1279`, and no less than `JMIN`.                                                                                                                                  |
-| `S1`                          | `random 15..64`   | `32`                           | Init packet padding size. Validation: integer `0..64`.                                                                                                                                                             |
-| `S2`                          | `random 15..64`   | `40`                           | Response packet padding size. Validation: integer `0..64`.                                                                                                                                                         |
-| `S3`                          | `random 15..64`   | `24`                           | Additional AWG 2 padding size. Validation: integer `0..64`; the generated default is non-zero.                                                                                                                    |
-| `S4`                          | `random 8..32`    | `16`                           | Additional AWG 2 padding size. Validation: integer `0..32`; the generated default is non-zero.                                                                                                                    |
-| `H1`                          | `random unique 5..2147483647` | `1000000001`                   | Init packet magic header. Validation: unique integer `5..2147483647`.                                                                                                                                              |
-| `H2`                          | `random unique 5..2147483647` | `1000000002`                   | Response packet magic header. Validation: unique integer `5..2147483647`.                                                                                                                                         |
-| `H3`                          | `random unique 5..2147483647` | `1000000003`                   | Underload packet magic header. Validation: unique integer `5..2147483647`.                                                                                                                                          |
-| `H4`                          | `random unique 5..2147483647` | `1000000004`                   | Transport packet magic header. Validation: unique integer `5..2147483647`.                                                                                                                                          |
-| `I1`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
-| `I2`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
-| `I3`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
-| `I4`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
-| `I5`                          | empty             | -                              | Optional AWG 2 signature expression. Validation: string; empty is allowed.                                                                                                                                         |
-
-> If you change `WG_PORT`, make sure to also change the exposed port.
-
-### Breaking migration: refresh every client profile
-
-This release changes the interface-wide AWG framing parameters. Existing
-downloaded profiles are not backward-compatible with the migrated server, so
-plan a short client refresh window:
-
-1. Back up the Docker volume that contains `/etc/wireguard` before upgrading.
-2. Deploy the image containing the pinned AWG 2.0.0 backend.
-3. Confirm that the one-time migration created
-   `/etc/wireguard/wg0.awg1.backup.json`:
+1. Save the current image and configuration before changing anything. Set the
+   actual container name: the installer uses `amnezia-wg-ui`, the repository
+   Compose file uses `amnezia-wg-easy`.
 
    ```bash
-   # Installer deployment: amnezia-wg-ui; repository Compose: amnezia-wg-easy.
    CONTAINER=amnezia-wg-ui
-   docker exec "$CONTAINER" test -f /etc/wireguard/wg0.awg1.backup.json
+   docker image tag "$(docker inspect --format '{{.Image}}' "$CONTAINER")" local/amnezia-wg-ui:before-awg31
+   docker cp "$CONTAINER:/etc/wireguard/wg0.json" ./wg0.before-awg31.json
+   cp .env .env.before-awg31
+   chmod 600 wg0.before-awg31.json .env.before-awg31
    ```
 
-4. Download every client `.conf` again from the admin panel.
-5. Import each new file into a current AWG 2-capable client and connect.
+2. Update these four settings **once on the server**, replacing old entries in
+   `.env` rather than adding duplicate keys:
 
-Do not reuse a previously downloaded profile after migration. Server and client
-keys are retained, but the old interface parameters differ from the new
-persisted v2 values.
+   ```dotenv
+   WG_ALLOWED_IPS=0.0.0.0/0
+   WG_DEFAULT_DNS=77.88.8.8, 77.88.8.1
+   WG_MTU=1280
+   WG_PERSISTENT_KEEPALIVE=20-25
+   ```
 
-### Diagnostics
+   Explicit settings take precedence over defaults. In particular, an existing
+   `WG_ALLOWED_IPS=0.0.0.0/0, ::/0` or old DNS value will not be silently
+   overridden. Remove obsolete AWG 2 parameter overrides unless deliberately
+   choosing a complete 3.1 preset. With random trailers enabled, `S1`–`S4` must
+   be equal and at least 12; do not copy the old unequal padding example.
 
-Run these commands on the host while attempting a connection:
+3. Deploy the new image, or build the updated checkout with
+   `docker compose up --build -d`. For installer/image deployments, wait until
+   the new release is published, then `docker compose pull` and
+   `docker compose up -d --force-recreate`. Review container logs and health.
+4. Download fresh profiles or scan fresh QR codes. Downloads, QR codes and
+   one-time links share the same profile generator; no per-file edits are needed.
+5. On Windows, Android, Linux, macOS and iOS, verify a fresh handshake, increasing
+   RX/TX, IPv4 web access, DNS and large transfers. Check both Wi-Fi and cellular
+   networks where available. An enabled toggle alone is not evidence of a tunnel.
 
-```bash
-# Installer deployment: amnezia-wg-ui; repository Compose: amnezia-wg-easy.
-CONTAINER=amnezia-wg-ui
-sudo tcpdump -ni any 'udp port 51820'
-docker exec "$CONTAINER" wg show wg0
-docker exec "$CONTAINER" wg show wg0 latest-handshakes
-```
+### Migration and rollback
 
-Interpret the results as follows:
+Startup migrates unversioned legacy state or `protocolVersion: 2` to
+`protocolVersion: "3.1"`. It preserves server/client identity keys, names,
+addresses, tags, quotas, expiry and links. Obfuscation parameters change once.
+Header protection, padding, timings and signatures then remain stable across
+restarts. Env changes do not rotate an existing persisted header key.
 
-- **No UDP:** packets are not reaching the host; check the endpoint address,
-  exposed UDP port, firewall, NAT, and cloud security rules.
-- **UDP without a handshake:** the endpoint is reachable but the client is not
-  completing WireGuard negotiation; use a freshly downloaded profile and an
-  AWG 2-capable client, then check keys and the persisted `S3`/`S4` values.
-- **Handshake without bidirectional traffic:** negotiation succeeded but data
-  is not traversing the tunnel; check forwarding/NAT, `AllowedIPs`, routes,
-  counters, and DNS configuration.
+Before migration the original JSON is saved exclusively as
+`/etc/wireguard/wg0.awg1.backup.json` or `wg0.awg2.backup.json`. Existing backups
+are never overwritten. Invalid state, unknown versions, or a conflicting backup
+stop migration. Restore also validates/migrates uploaded state and saves a
+`wg0.pre-restore.<uuid>.json` snapshot before replacement.
 
-### Rollback
-
-Keep `wg0.awg1.backup.json` until all five platform checks below pass. The
-image and JSON backup are captured at different lifecycle points; do not try to
-discover the previous image during rollback, after the current container has
-already migrated to AWG 2.
-
-#### A. Before upgrade: save the AWG 1 image
-
-Run this while the current AWG 1 container still exists, before pulling or
-recreating anything. It records a stable local tag in the installer directory,
-so later shells do not depend on an exported variable:
-
-```bash
-set -eu
-cd /opt/amnezia-wg-ui
-CONTAINER=amnezia-wg-ui
-ROLLBACK_IMAGE='local/amnezia-wg-ui:awg1-rollback'
-PREVIOUS_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$CONTAINER")"
-test -n "$PREVIOUS_IMAGE_ID"
-docker image tag "$PREVIOUS_IMAGE_ID" "$ROLLBACK_IMAGE"
-printf '%s\n' "$ROLLBACK_IMAGE" > .awg1-rollback-image
-docker image inspect "$ROLLBACK_IMAGE" >/dev/null
-```
-
-This phase intentionally does not look for `wg0.awg1.backup.json`; migration has
-not happened yet.
-
-#### B. Normal AWG 2 deployment and migration
-
-Continue the normal update only after Phase A succeeds. The application creates
-the legacy backup during this migration, not during image capture:
+To roll back, stop the container, restore `wg0.before-awg31.json` to
+`/etc/wireguard/wg0.json` in its existing volume, and set the Compose image to
+`local/amnezia-wg-ui:before-awg31` before recreating it. A stopped container can
+be used as the copy destination:
 
 ```bash
-set -eu
-cd /opt/amnezia-wg-ui
-docker compose pull
-docker compose up -d
-CONTAINER=amnezia-wg-ui
-docker exec "$CONTAINER" test -f /etc/wireguard/wg0.awg1.backup.json
-```
-
-If the final `test` fails, stop and investigate before distributing profiles.
-After it succeeds, download every client profile again. Do not overwrite or
-delete the backup while acceptance testing is in progress.
-
-#### C. After a failed migration or platform acceptance: restore AWG 1
-
-For the installer deployment under `/opt/amnezia-wg-ui`, run this only after
-Phase B has created `wg0.awg1.backup.json`. It reads the stable tag saved in
-Phase A, never tags the current AWG 2 container, and resolves the actual
-Compose-created volume name instead of assuming `awg_data` or a project prefix.
-
-```bash
-set -eu
-cd /opt/amnezia-wg-ui
-CONTAINER=amnezia-wg-ui
-ROLLBACK_IMAGE="$(cat .awg1-rollback-image)"
-test "$ROLLBACK_IMAGE" = 'local/amnezia-wg-ui:awg1-rollback'
-docker image inspect "$ROLLBACK_IMAGE" >/dev/null
-
-# Resolve and validate the current container's named /etc/wireguard volume
-# before Compose removes/recreates that container.
-WIREGUARD_MOUNT_TYPE="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/wireguard"}}{{.Type}}{{end}}{{end}}' "$CONTAINER")"
-test "$WIREGUARD_MOUNT_TYPE" = volume
-WIREGUARD_VOLUME="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/wireguard"}}{{if eq .Type "volume"}}{{.Name}}{{end}}{{end}}{{end}}' "$CONTAINER")"
-test -n "$WIREGUARD_VOLUME"
-docker volume inspect "$WIREGUARD_VOLUME" >/dev/null
-
-# Stop AWG 2, then verify and restore the migration backup in that exact volume.
-docker compose stop amnezia-wg-ui
-docker run --rm -v "$WIREGUARD_VOLUME:/etc/wireguard" alpine:3.20 \
-  sh -ec 'test -f /etc/wireguard/wg0.awg1.backup.json; cp /etc/wireguard/wg0.awg1.backup.json /etc/wireguard/wg0.json'
-
-# Recreate the service with the saved pre-upgrade AWG 1 image.
-ROLLBACK_OVERRIDE="$(mktemp)"
-trap 'rm -f "$ROLLBACK_OVERRIDE"' EXIT
-printf 'services:\n  amnezia-wg-ui:\n    image: %s\n' "$ROLLBACK_IMAGE" > "$ROLLBACK_OVERRIDE"
-docker compose -f docker-compose.yml -f "$ROLLBACK_OVERRIDE" up -d --force-recreate
-```
-
-The `test` commands stop on a missing or wrong-type mount, and the helper uses
-only the resolved volume name. Do not run `docker compose down -v`; that would
-remove the data needed for rollback. The temporary Compose override is removed
-by the `trap` after the saved AWG 1 image is running.
-
-For a bind-mounted data directory, use the same Phase A tag and Phase B timing.
-After migration, use this Phase C variant; it validates the current container's
-bind source before removal and then re-runs the original command with the saved
-AWG 1 tag:
-
-```bash
-set -eu
-cd /opt/amnezia-wg-ui
-CONTAINER=amnezia-wg-ui
-ROLLBACK_IMAGE="$(cat .awg1-rollback-image)"
-test "$ROLLBACK_IMAGE" = 'local/amnezia-wg-ui:awg1-rollback'
-docker image inspect "$ROLLBACK_IMAGE" >/dev/null
-BIND_WIREGUARD_DIR="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/wireguard"}}{{if eq .Type "bind"}}{{.Source}}{{end}}{{end}}{{end}}' "$CONTAINER")"
-test -n "$BIND_WIREGUARD_DIR"
-test -f "$BIND_WIREGUARD_DIR/wg0.awg1.backup.json"
 docker stop "$CONTAINER"
-docker rm "$CONTAINER"
-cp "$BIND_WIREGUARD_DIR/wg0.awg1.backup.json" "$BIND_WIREGUARD_DIR/wg0.json"
-# Re-run the original docker run command with "$ROLLBACK_IMAGE" as its image.
+docker cp ./wg0.before-awg31.json "$CONTAINER:/etc/wireguard/wg0.json"
+# Set the existing Compose service's image to local/amnezia-wg-ui:before-awg31.
+docker compose up -d --force-recreate
 ```
 
-Do not overwrite or delete the backup until rollback is no longer needed.
+Keep both old/new backups. Old profiles match the old image/settings; 3.1
+profiles match the migrated settings. Restoring only an old image is insufficient.
 
-### Required platform acceptance matrix
+## Persistent clients and traffic
 
-This is a release gate, not a record of completed manual validation. On each
-platform use the latest available official AWG 2-capable client. AmneziaVPN
-must be at least `4.8.12.9`; native AmneziaWG clients must explicitly support
-non-zero `S3` and `S4`.
+`/etc/wireguard/state.sqlite` is the source of truth for server settings, client
+records and traffic totals. It uses transactions and SQLite WAL in the existing
+Docker data volume; no Redis or separate database service is needed. Preserve
+that volume when recreating the container.
 
-| Platform | Required checks |
-|----------|-----------------|
-| Windows | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
-| Android | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
-| Linux | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
-| macOS | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
-| iOS | Import a freshly downloaded `.conf`; observe a non-zero fresh handshake timestamp, increasing RX and TX counters, IPv4 web access, and DNS success. |
+On the first start, existing `wg0.json` data is imported automatically and copied
+to `wg0.pre-sqlite.backup.json`. Keys, names, addresses, tags, quotas and expiry
+are retained. Later starts read SQLite. `wg0.json` is a compatibility snapshot
+refreshed on configuration saves; editing it does not change an initialized
+database. Use the admin's backup/restore actions to export or replace state.
+The exported JSON includes accumulated traffic, and restore makes a backup of
+the current state before replacement.
 
-Connection UI state alone is not acceptance evidence; all five platforms must
-show a handshake and bidirectional traffic before the migration is considered
-complete.
+Traffic is sampled every five seconds even when no browser is open, and before
+peer changes and graceful shutdown. Interface identities and stored cursors
+prevent double counting after restart. Legacy quota cursors are converted while
+retaining existing quota usage. A sudden power loss can lose traffic since the
+last successful sample; counters already lost before this update cannot be
+reconstructed. For backups, use the admin export instead of copying a live
+SQLite file without its WAL.
 
-## Updating
+This storage/UI update does not change VPN profiles. The profile re-import
+above applies when upgrading the protocol from AWG 1/2 to AWG 3.1. An old image
+reads JSON; when returning to this version, SQLite remains authoritative. Restore
+the intended JSON through this version's admin if its database needs replacing.
+
+## Networking defaults and limits
+
+The server currently provisions IPv4 addresses, forwarding and NAT. The default
+export therefore routes only `0.0.0.0/0`, uses Yandex basic DNS
+`77.88.8.8, 77.88.8.1`, and sets MTU `1280`. The generator checks CIDR/IP syntax,
+MTU including AWG overhead, and keepalive ranges before exporting.
+
+**Native IPv6 is not tunneled by this IPv4 profile.** Removing `::/0` is not an
+IPv6 kill switch. Full IPv6 server routing is outside this release. Network
+blocking and outdated client applications can still prevent a handshake; changing
+DNS cannot repair an absent handshake. `I1` signatures remain network-specific
+and optional, as described in the [official parameters](https://docs.amnezia.org/documentation/amnezia-wg/).
+
+| Environment variable | Default | Purpose |
+| --- | --- | --- |
+| `WG_HOST` | required | Public IP/hostname in exported endpoints |
+| `WG_PORT` | `51820` | VPN UDP listen/public port |
+| `WG_CONFIG_PORT` | `WG_PORT` | Exported endpoint port override |
+| `PORT`, `WEBUI_HOST` | `51821`, `0.0.0.0` | Admin listen port/address |
+| `PASSWORD_HASH` | unset | Bcrypt admin hash; use the setup helper |
+| `WG_DEFAULT_ADDRESS` | `10.8.0.x` | IPv4 tunnel subnet |
+| `WG_ALLOWED_IPS` | `0.0.0.0/0` | Exported routes; custom split routes allowed |
+| `WG_DEFAULT_DNS` | `77.88.8.8, 77.88.8.1` | DNS IPs; explicit blank omits DNS |
+| `WG_MTU` | `1280` | Tunnel MTU, validated with padding overhead |
+| `WG_PERSISTENT_KEEPALIVE` | `20-25` | NAT keepalive interval/range in seconds |
+| `WG_DEVICE` | `eth0` | IPv4 NAT egress interface |
+| `LANG` | `en` | Initial language; saved user preference is retained |
+| `MAX_AGE` | `0` | Remember-me duration in minutes |
+| `UI_TRAFFIC_STATS` | `false` | Live rates in client cards |
+| `UI_CHART_TYPE` | `0` | `0` off, `1` line, `2` area, `3` bar |
+| `UI_ENABLE_SORT_CLIENTS` | `false` | Legacy setting accepted; new toolbar always offers sorting |
+| `WG_ENABLE_ONE_TIME_LINKS` | `false` | Single-use profile links |
+| `DICEBEAR_TYPE`, `USE_GRAVATAR` | unset | Optional external avatars |
+| `ENABLE_PROMETHEUS_METRICS` | `false` | `/metrics` endpoint |
+| `PROMETHEUS_METRICS_PASSWORD` | unset | Optional metrics password |
+
+`WG_PRE_UP`, `WG_POST_UP`, `WG_PRE_DOWN`, `WG_POST_DOWN` remain available.
+AWG 3.1 parameter names and examples are in [.env.example](.env.example).
+The default preset uses a generated header key, equal 16–32 byte prefixes,
+compatibility headers 1–4, content padding 16–64, randomized timings, random
+trailers, and cookie protection. Custom larger paddings are constrained to stay
+within the export MTU budget.
+
+## Development and verification
+
+Use Node 24 LTS. Backend and frontend dependencies are separate.
 
 ```bash
-docker stop amnezia-wg-ui
-docker rm amnezia-wg-ui
-docker pull ghcr.io/cmtrswtng/amnezia-wg-ui
+npm --prefix src ci
+npm --prefix src/www ci
+npm --prefix src test
+npm --prefix src run lint
+npm --prefix src/www test
+npm --prefix src/www run build
+npx --prefix src/www playwright install chromium
+npm --prefix src/www run test:e2e
 ```
 
-And then run the `docker run -d \ ...` command above again.
+Browser tests serve the production build on loopback port 4180 and use synthetic
+API fixtures. They cover desktop/mobile navigation, search, forms, login/logout,
+dialog focus and overflow at 360px. They do not contact a production VPN.
+Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to reuse an installed Chromium if needed.
 
-## Credits
+For container-level verification:
 
-This project is a fork of [amnezia-wg-easy](https://github.com/w0rng/amnezia-wg-easy) by [@w0rng](https://github.com/w0rng),
-which is based on [wg-easy](https://github.com/wg-easy/wg-easy) by Emile Nijssen and uses the AmneziaWG integration
-from [amnezia-wg-easy](https://github.com/spcfox/amnezia-wg-easy) by Viktor Yudov.
+```bash
+docker build -t amnezia-wg-ui:awg31-review .
+bash scripts/smoke-awg31.sh amnezia-wg-ui:awg31-review
+```
 
-The fork adds the redesigned admin UI, client tags, traffic quotas, bulk actions, the sales dashboard and the audit log.
+The smoke script creates an isolated Docker network and disposable containers
+with no published ports or production volume. It checks fresh and v2-migrated
+state, real AWG parsing, a handshake, bidirectional large packets and Yandex DNS
+through the encrypted tunnel. It then verifies clients and nonzero traffic
+after container restart and replacement with the same disposable volume, and
+removes its containers, network and volumes. It requires
+outbound DNS access. CI runs it before publishing an image.
+
+For hot reload: `npm run serve:dev`. The React UI is on port 5173 and proxies to
+the configured backend. On restricted Windows environments, set `TEMP`/`TMP` to
+an ignored directory inside `src/node_modules` when testing atomic file writes.
+
+## Credits and licenses
+
+Fork of [w0rng/amnezia-wg-easy](https://github.com/w0rng/amnezia-wg-easy), based on
+[wg-easy](https://github.com/wg-easy/wg-easy) and the AmneziaWG integration by
+[spcfox](https://github.com/spcfox/amnezia-wg-easy).
+The repository retains its [CC BY-NC-SA 4.0 license](LICENSE).
+UI third-party notices, including the React Bits license, are in
+[src/www/THIRD_PARTY_NOTICES.md](src/www/THIRD_PARTY_NOTICES.md).

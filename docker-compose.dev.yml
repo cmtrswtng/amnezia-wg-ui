@@ -10,11 +10,11 @@ services:
     command: ["/usr/bin/dumb-init", "sh", "-c", "test -d node_modules/nodemon || npm install --no-audit --no-fund; npx nodemon --legacy-watch server.js"]
 
   ui:
-    image: node:18-alpine
+    image: node:24-alpine
     working_dir: /ui
     command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
     environment:
-      - API_TARGET=http://amnezia-wg-easy:51821
+      - API_TARGET=http://amnezia-wg-easy:${PORT:-51821}
       - CHOKIDAR_USEPOLLING=true
     volumes:
       - ./src/www:/ui

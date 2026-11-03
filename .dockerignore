@@ -1,3 +1,7 @@
 /src/node_modules
 /src/www/node_modules
 /src/www/dist
+/.git
+/.worktrees
+/.superpowers
+/.env

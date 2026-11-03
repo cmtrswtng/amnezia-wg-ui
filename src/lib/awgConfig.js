@@ -177,6 +177,7 @@ const renderAwg2InterfaceLines = (server) => {
 };
 
 module.exports = {
+  validateCoreConfigShape,
   PROTOCOL_VERSION,
   createAwg2Parameters,
   validateAwg2Parameters,

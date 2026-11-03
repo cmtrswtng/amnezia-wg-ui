@@ -20,13 +20,20 @@ jobs:
 
     - uses: actions/setup-node@v4
       with:
-        node-version: 18
+        node-version: 24
         cache: npm
-        cache-dependency-path: src/package-lock.json
+        cache-dependency-path: |
+          src/package-lock.json
+          src/www/package-lock.json
 
     - run: npm ci --prefix src
     - run: npm --prefix src test
     - run: npm --prefix src run lint
+
+    - run: npm ci --prefix src/www
+    - run: npm --prefix src/www test
+    - run: npx --prefix src/www playwright install --with-deps chromium
+    - run: npm --prefix src/www run test:e2e
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -38,37 +45,13 @@ jobs:
         platforms: linux/amd64
         load: true
         push: false
-        tags: amnezia-wg-ui:awg2-smoke
+        tags: amnezia-wg-ui:awg31-smoke
 
     - name: Verify AWG tooling
-      run: docker run --rm --entrypoint sh amnezia-wg-ui:awg2-smoke -c "command -v amneziawg-go && command -v wg && command -v wg-quick"
+      run: docker run --rm --entrypoint sh amnezia-wg-ui:awg31-smoke -c "command -v amneziawg-go && wg --version && command -v wg-quick && node --version"
 
-    - name: Start AWG interface smoke container
-      run: |
-        AWG2_SMOKE_DIR="$(mktemp -d)"
-        echo "AWG2_SMOKE_DIR=$AWG2_SMOKE_DIR" >> "$GITHUB_ENV"
-        docker run -d --name awg2-smoke \
-          --cap-add NET_ADMIN \
-          --device /dev/net/tun \
-          -e WG_HOST=127.0.0.1 \
-          -e WG_ALLOWED_IPS=0.0.0.0/0 \
-          -v "$AWG2_SMOKE_DIR:/etc/wireguard" \
-          amnezia-wg-ui:awg2-smoke
-
-    - name: Verify AWG interface
-      run: |
-        timeout 30s bash -c '
-          until timeout 5s docker exec awg2-smoke wg show wg0; do
-            sleep 1
-          done
-        '
-
-    - name: Collect AWG smoke logs and cleanup
-      if: always()
-      run: |
-        docker logs awg2-smoke || true
-        docker rm -f awg2-smoke || true
-        rm -rf "$AWG2_SMOKE_DIR"
+    - name: Verify fresh and migrated AWG tunnels and DNS
+      run: timeout 120s bash scripts/smoke-awg31.sh amnezia-wg-ui:awg31-smoke
 
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v3

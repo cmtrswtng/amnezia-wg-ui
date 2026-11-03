@@ -1,6 +1,6 @@
 {
   "release": {
-    "version": "15"
+    "version": "17"
   },
   "name": "amnezia-wg-ui",
   "version": "1.0.1",
@@ -34,6 +34,6 @@
     ]
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   }
 }
