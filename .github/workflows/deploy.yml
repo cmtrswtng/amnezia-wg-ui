@@ -47,6 +47,12 @@ jobs:
         push: false
         tags: amnezia-wg-ui:awg31-smoke
 
+    - name: Verify independent installer instances
+      run: |
+        docker run --rm --env AWG_INSTALLER_TEST_CONTAINER=1 \
+          --mount type=bind,source="${{ github.workspace }}",target=/workspace,readonly \
+          --entrypoint bash amnezia-wg-ui:awg31-smoke /workspace/scripts/test-installer.sh
+
     - name: Verify AWG tooling
       run: docker run --rm --entrypoint sh amnezia-wg-ui:awg31-smoke -c "command -v amneziawg-go && wg --version && command -v wg-quick && node --version"
 

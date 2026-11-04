@@ -50,12 +50,54 @@ it no longer points at the upstream fork's image.
 The Linux installer is also available:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/cmtrswtng/amnezia-wg-ui/master/install.sh)
+curl -fsSL https://raw.githubusercontent.com/cmtrswtng/amnezia-wg-ui/master/install.sh -o install-awg.sh
+sudo bash install-awg.sh
 ```
 
 The installer writes `/opt/amnezia-wg-ui/.env`, Compose settings and an admin
 password hash; VPN data is retained in its Docker volume. Never use
 `docker compose down -v` when you want to preserve clients and keys.
+
+### Running an additional instance
+
+The installer supports independent instances, for example to keep AWG 2 running
+while users move to AWG 3.1. Download the installer as above, then run:
+
+```bash
+sudo bash install-awg.sh --instance awg31 --image ghcr.io/cmtrswtng/amnezia-wg-ui:17
+```
+
+`--instance awg31` uses `/opt/amnezia-wg-ui-awg31`, container
+`amnezia-wg-ui-awg31`, Compose project `amnezia-wg-ui-awg31` and its own
+`amnezia-wg-ui-awg31_awg_data` volume. It defaults to admin port `51823/tcp`,
+VPN port `51822/udp` and address template `10.9.0.x`. Choose unused ports at the
+prompts and allow them in the server/provider firewall. Existing instances retain
+their containers, ports, volumes and client configurations. Do not restore the
+old data into a volume shared by both versions.
+
+Without `--instance`, the installer manages the original `/opt/amnezia-wg-ui`
+installation. For an additional instance, keep `--instance awg31` on every
+installer command. Updating that instance retains its saved image tag, password
+and ports; use `--image` explicitly to select another image:
+
+```bash
+sudo bash install-awg.sh --instance awg31
+cd /opt/amnezia-wg-ui-awg31
+sudo docker compose ps
+sudo docker compose logs --tail=100
+```
+
+Before future updates of the old installation, preserve its current image with a
+local tag or digest and pin that image in its Compose file. Its `latest` tag now
+points to AWG 3.1. An already-running old container continues using its original
+image until it is recreated. For migration without an interruption, leave the old
+container running while issuing new 3.1 profiles from the additional instance.
+
+`--reconfigure` explicitly replaces the selected instance's settings after making
+backup copies; ordinary updates never rewrite passwords or ports. Declining an
+update exits. Unknown arguments and occupied ports stop the installer. Run
+`bash install-awg.sh --help` for options. Downloading to a file before using sudo
+avoids the `/dev/fd/63` error from `sudo bash <(curl ...)`.
 
 ## Upgrading an existing server to 3.1
 
