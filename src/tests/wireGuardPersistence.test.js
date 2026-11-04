@@ -6,6 +6,7 @@ const path = require('node:path');
 const os = require('node:os');
 const WireGuard = require('../lib/WireGuard');
 const { createAwg31Parameters } = require('../lib/awg31Config');
+const configFiles = require('../lib/configFiles');
 
 const fixture = () => ({
   protocolVersion: '3.1',
@@ -23,11 +24,16 @@ describe('persistent WireGuard state', () => {
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'awg-persistence-'));
     current = { rx: 0, tx: 0 }; epoch = 'boot:1';
-    exec = vi.fn(async (command) => (command === 'wg show wg0 dump'
-      ? `interface\n alice-public\tpsk\t(none)\t10.8.0.2/32\t0\t${current.rx}\t${current.tx}\t20-25`.replace('\n ', '\n') : ''));
+    exec = vi.fn(async (command) => {
+      if (command === 'wg show wg0 dump') {
+        return `interface\n alice-public\tpsk\t(none)\t10.8.0.2/32\t0\t${current.rx}\t${current.tx}\t20-25`.replace('\n ', '\n');
+      }
+      return command.startsWith('wg gen') || command === 'wg pubkey' ? 'new-test-key' : '';
+    });
     await fs.writeFile(path.join(dir, 'wg0.json'), JSON.stringify(fixture()));
   });
   afterEach(async () => {
+    vi.restoreAllMocks();
     await fs.rm(dir, { recursive: true, force: true });
   });
   const instance = () => new WireGuard({
@@ -114,5 +120,122 @@ describe('persistent WireGuard state', () => {
     await wg.updateClientName({ clientId: 'alice', name: 'Renamed' });
     const snapshot = JSON.parse(await fs.readFile(path.join(dir, 'wg0.json'), 'utf8'));
     expect(snapshot.clients.alice).toMatchObject({ name: 'Renamed', transferRxTotal: 100, transferTxTotal: 50 });
+  });
+  it('applies a restored subnet, routes and NAT before reporting restore complete', async () => {
+    const initial = fixture(); initial.server.address = '10.9.0.1'; initial.clients.alice.address = '10.9.0.2';
+    await fs.writeFile(path.join(dir, 'wg0.json'), JSON.stringify(initial));
+    const transitions = [];
+    const originalExec = exec.getMockImplementation();
+    exec.mockImplementation(async (command, options) => {
+      if (command === 'wg-quick down wg0' || command === 'wg-quick up wg0') {
+        transitions.push({ command, profile: await fs.readFile(path.join(dir, 'wg0.conf'), 'utf8') });
+      }
+      return originalExec(command, options);
+    });
+    const wg = new WireGuard({
+      wgPath: dir, env: { WG_HOST: 'vpn.test', WG_DEFAULT_ADDRESS: '10.9.0.x' }, exec, interfaceEpoch: async () => epoch,
+    });
+    await wg.getConfig(); transitions.length = 0;
+    await wg.restoreConfiguration(JSON.stringify(fixture()));
+    expect(transitions.map((step) => step.command)).toEqual(['wg-quick down wg0', 'wg-quick up wg0']);
+    expect(transitions[0].profile).toContain('Address = 10.9.0.1/24');
+    expect(transitions[0].profile).toContain('-s 10.9.0.0/24');
+    expect(transitions[1].profile).toContain('Address = 10.8.0.1/24');
+    expect(transitions[1].profile).toContain('-s 10.8.0.0/24');
+    await wg.createClient({ name: 'New client after restore' });
+    const created = Object.values((await wg.getConfig()).clients).find((client) => client.name === 'New client after restore');
+    expect(created.address).toBe('10.8.0.3');
+  });
+  it('brings the previous configuration back if a restored interface cannot start', async () => {
+    const wg = instance(); await wg.getConfig();
+    const changed = fixture(); changed.server.address = '10.9.0.1'; changed.clients.alice.address = '10.9.0.2';
+    const originalExec = exec.getMockImplementation(); let rejectNextUp = true;
+    exec.mockImplementation(async (command, options) => {
+      if (command === 'wg-quick up wg0' && rejectNextUp) {
+        rejectNextUp = false; throw new Error('restore interface failed');
+      }
+      return originalExec(command, options);
+    });
+    await expect(wg.restoreConfiguration(JSON.stringify(changed))).rejects.toThrow('restore interface failed');
+    expect((await wg.getConfig()).server.address).toBe('10.8.0.1');
+    expect(await fs.readFile(path.join(dir, 'wg0.conf'), 'utf8')).toContain('Address = 10.8.0.1/24');
+  });
+  it('waits for the restored interface before serving a concurrent client poll', async () => {
+    const wg = instance(); await wg.getConfig();
+    const changed = fixture(); changed.server.address = '10.9.0.1'; changed.clients.alice.address = '10.9.0.2';
+    let startUp; let finishUp;
+    const upStarted = new Promise((resolve) => {
+      startUp = resolve;
+    });
+    const mayFinishUp = new Promise((resolve) => {
+      finishUp = resolve;
+    });
+    const originalExec = exec.getMockImplementation();
+    exec.mockImplementation(async (command, options) => {
+      if (command === 'wg-quick up wg0') {
+        startUp(); await mayFinishUp;
+      }
+      return originalExec(command, options);
+    });
+    const restoring = wg.restoreConfiguration(JSON.stringify(changed));
+    await upStarted;
+    let pollFinished = false;
+    const polling = wg.getClients().then((clients) => {
+      pollFinished = true; return clients;
+    });
+    await Promise.resolve(); expect(pollFinished).toBe(false);
+    finishUp(); await restoring;
+    expect((await polling)[0].address).toBe('10.9.0.2');
+  });
+  it('restarts the previous interface when down removes it and then fails in PostDown', async () => {
+    const wg = instance(); await wg.getConfig();
+    let live = true; let failDown = true;
+    const originalExec = exec.getMockImplementation();
+    exec.mockImplementation(async (command, options) => {
+      if (command === 'wg-quick down wg0') {
+        live = false;
+        if (failDown) {
+          failDown = false; throw new Error('PostDown failed');
+        }
+      }
+      if (command === 'wg-quick up wg0') live = true;
+      return originalExec(command, options);
+    });
+    const changed = fixture(); changed.server.address = '10.9.0.1';
+    await expect(wg.restoreConfiguration(JSON.stringify(changed))).rejects.toThrow('PostDown failed');
+    expect(live).toBe(true);
+    expect((await wg.getConfig()).server.address).toBe('10.8.0.1');
+  });
+  it('finishes an in-flight configuration save before applying an imported subnet', async () => {
+    const wg = instance(); await wg.getConfig();
+    let saveReached; let releaseSave;
+    const savingFile = new Promise((resolve) => {
+      saveReached = resolve;
+    });
+    const maySave = new Promise((resolve) => {
+      releaseSave = resolve;
+    });
+    const write = configFiles.writeFileAtomic; let pauseNextConf = true;
+    vi.spyOn(configFiles, 'writeFileAtomic').mockImplementation(async (file, ...args) => {
+      if (file.endsWith('wg0.conf') && pauseNextConf) {
+        pauseNextConf = false; saveReached(); await maySave;
+      }
+      return write(file, ...args);
+    });
+    const saving = wg.updateClientName({ clientId: 'alice', name: 'Renamed before import' });
+    await savingFile;
+    const changed = fixture(); changed.server.address = '10.9.0.1'; changed.clients.alice.address = '10.9.0.2';
+    let restoreFinished = false;
+    const restoring = wg.restoreConfiguration(JSON.stringify(changed)).then(() => {
+      restoreFinished = true;
+    });
+    // Leave the older atomic write pending while the competing restore runs.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const finishedBeforeSave = restoreFinished;
+    releaseSave(); await Promise.all([saving, restoring]);
+    expect(finishedBeforeSave).toBe(false);
+    expect((await wg.getConfig()).server.address).toBe('10.9.0.1');
+    expect(wg.store.loadConfig().server.address).toBe('10.9.0.1');
+    expect(await fs.readFile(path.join(dir, 'wg0.conf'), 'utf8')).toContain('Address = 10.9.0.1/24');
   });
 });

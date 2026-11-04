@@ -15,5 +15,6 @@
   "14": "Home Assistent support, PASSWORD_HASH (inc. Helper), translation updates bugfixes & more.",
   "15": "Pinned the amneziavpn/amneziawg-go:2.0.0 backend for linux/amd64, with a breaking profile refresh, one-time migration backup, and AWG 2 configuration support.",
   "16": "AmneziaWG 3.1 with protected headers, automatic backed-up migration and shared IPv4/Yandex/MTU profiles. React 19 administration with cloud-white/sky-blue/red styling, client search by name/IP/tag, real handshake indicators, compact view, richer sorting and accessible dialogs.",
-  "17": "SQLite persistence for clients and lifetime traffic with automatic JSON import, restart-safe cursors and quota migration. Refined cloud/sky/rose interface, system typography, restored React Bits effects and reduced-motion support."
+  "17": "SQLite persistence for clients and lifetime traffic with automatic JSON import, restart-safe cursors and quota migration. Refined cloud/sky/rose interface, system typography, restored React Bits effects and reduced-motion support.",
+  "18": "Restore reapplies interface addresses, routes and NAT with rollback on failure, using the persisted subnet for new clients. Independent session cookies for parallel admin ports and correct JSON 401 responses when a session expires."
 }

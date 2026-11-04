@@ -25,7 +25,9 @@ const {
 
 const WireGuard = require('../services/WireGuard');
 const AuditLog = require('../services/AuditLog');
-const { requiresPassword, isPasswordValid, apiAuthMiddleware } = require('./Auth');
+const {
+  requiresPassword, isPasswordValid, apiAuthMiddleware, sessionCookieName,
+} = require('./Auth');
 
 const {
   PORT,
@@ -58,6 +60,7 @@ module.exports = class Server {
     this.app = app;
 
     app.use(fromNodeMiddleware(expressSession({
+      name: sessionCookieName(PORT),
       secret: crypto.randomBytes(256).toString('hex'),
       resave: true,
       saveUninitialized: true,

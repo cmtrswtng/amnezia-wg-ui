@@ -64,7 +64,7 @@ The installer supports independent instances, for example to keep AWG 2 running
 while users move to AWG 3.1. Download the installer as above, then run:
 
 ```bash
-sudo bash install-awg.sh --instance awg31 --image ghcr.io/cmtrswtng/amnezia-wg-ui:17
+sudo bash install-awg.sh --instance awg31 --image ghcr.io/cmtrswtng/amnezia-wg-ui:18
 ```
 
 `--instance awg31` uses `/opt/amnezia-wg-ui-awg31`, container
@@ -189,6 +189,19 @@ database. Use the admin's backup/restore actions to export or replace state.
 The exported JSON includes accumulated traffic, and restore makes a backup of
 the current state before replacement.
 
+Starting with release 18, restore restarts only this instance's tunnel to apply
+the saved interface address, routes and NAT. NAT and newly allocated client
+addresses follow the persisted server subnet, even if `WG_DEFAULT_ADDRESS` in
+the deployment environment still contains the original installation default.
+Explicit lifecycle hook overrides remain in effect. If the restored tunnel
+cannot start, restore attempts to bring back the previous configuration. On
+release 17, restoring a different subnet requires recreating that instance's
+container after import.
+
+Admin sessions use a different cookie name for each web port so simultaneous
+panels on one hostname do not overwrite each other's sessions. After upgrading
+to release 18, sign in again; existing VPN profiles are unaffected by this fix.
+
 Traffic is sampled every five seconds even when no browser is open, and before
 peer changes and graceful shutdown. Interface identities and stored cursors
 prevent double counting after restart. Legacy quota cursors are converted while
@@ -222,7 +235,7 @@ and optional, as described in the [official parameters](https://docs.amnezia.org
 | `WG_CONFIG_PORT` | `WG_PORT` | Exported endpoint port override |
 | `PORT`, `WEBUI_HOST` | `51821`, `0.0.0.0` | Admin listen port/address |
 | `PASSWORD_HASH` | unset | Bcrypt admin hash; use the setup helper |
-| `WG_DEFAULT_ADDRESS` | `10.8.0.x` | IPv4 tunnel subnet |
+| `WG_DEFAULT_ADDRESS` | `10.8.0.x` | Initial IPv4 tunnel subnet; persisted subnet takes precedence |
 | `WG_ALLOWED_IPS` | `0.0.0.0/0` | Exported routes; custom split routes allowed |
 | `WG_DEFAULT_DNS` | `77.88.8.8, 77.88.8.1` | DNS IPs; explicit blank omits DNS |
 | `WG_MTU` | `1280` | Tunnel MTU, validated with padding overhead |
@@ -274,8 +287,9 @@ bash scripts/smoke-awg31.sh amnezia-wg-ui:awg31-review
 
 The smoke script creates an isolated Docker network and disposable containers
 with no published ports or production volume. It checks fresh and v2-migrated
-state, real AWG parsing, a handshake, bidirectional large packets and Yandex DNS
-through the encrypted tunnel. It then verifies clients and nonzero traffic
+state, a live cross-subnet restore on a nondefault VPN port, real AWG parsing,
+a handshake, bidirectional large packets and Yandex DNS through the encrypted
+tunnel. It then verifies clients and nonzero traffic
 after container restart and replacement with the same disposable volume, and
 removes its containers, network and volumes. It requires
 outbound DNS access. CI runs it before publishing an image.

@@ -5,6 +5,14 @@ const bcrypt = require('bcryptjs');
 const { PASSWORD_HASH } = require('../config');
 
 const requiresPassword = !!PASSWORD_HASH;
+// Cookies are scoped by hostname/path, not by TCP port.
+const sessionCookieName = (port) => `awg.sid.${port}`;
+
+const unauthorized = (res, message) => {
+  res.statusCode = 401;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify({ error: message }));
+};
 
 /**
  * Checks if `password` matches the given bcrypt hash.
@@ -45,18 +53,15 @@ const apiAuthMiddleware = (req, res, next) => {
     if (isPasswordValid(req.headers['authorization'])) {
       return next();
     }
-    return res.status(401).json({
-      error: 'Incorrect Password',
-    });
+    return unauthorized(res, 'Incorrect Password');
   }
 
-  return res.status(401).json({
-    error: 'Not Logged In',
-  });
+  return unauthorized(res, 'Not Logged In');
 };
 
 module.exports = {
   requiresPassword,
   isPasswordValid,
   apiAuthMiddleware,
+  sessionCookieName,
 };

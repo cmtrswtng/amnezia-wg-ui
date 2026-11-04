@@ -61,7 +61,7 @@ jobs:
         sudo modprobe iptable_filter
         sudo modprobe iptable_nat
 
-    - name: Verify fresh and migrated AWG tunnels and DNS
+    - name: Verify fresh, migrated and restored AWG tunnels and DNS
       run: timeout 120s bash scripts/smoke-awg31.sh amnezia-wg-ui:awg31-smoke
 
     - name: Login to GitHub Container Registry
